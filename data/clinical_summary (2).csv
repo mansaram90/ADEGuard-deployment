@@ -1,0 +1,21 @@
+Cluster_Label,DRUG,ADE,case_count
+High severity group (Senior),None,dead,1
+High severity group (Senior),None,"passed away, dead",1
+Low severity group (Middle Age),Johnson & Johnson vaccine,"headache, muscle pain",1
+Low severity group (Middle Age),Pfizer booster,"rash, pain, arm pain",1
+Medium severity group (Middle Age),Johnson & Johnson,"rash, fatigue",1
+Medium severity group (Middle Age),Moderna,"high fever, chills",1
+Medium severity group (Middle Age),Moderna,"rash, dizziness",1
+Medium severity group (Middle Age),Pfizer,"chest, fatigue, chest discomfort",1
+Medium severity group (Middle Age),Pfizer - BioNTech,"dizziness, fatigue, rash",1
+Medium severity group (Middle Age),Pfizer booster,"fatigue, dizziness, fever",1
+Medium severity group (Middle Age),astrazeneca,"nausea, chest pain",1
+Medium severity group (Middle Age),astrazeneca,"shortness of breath, chest tightness",1
+Medium severity group (Middle Age),astrazeneca,"shortness of breath, muscle",1
+Medium severity group (Young Adult),Covaxin,"high fever, vomiting",1
+Medium severity group (Young Adult),Covaxin,"rash, itching",1
+Medium severity group (Young Adult),Covishield,"dizziness, low, fever",1
+Medium severity group (Young Adult),Moderna,None,1
+Medium severity group (Young Adult),Moderna booster,"redness, swelling",1
+Medium severity group (Young Adult),covaxin,"nausea, bodyache",1
+Medium severity group (Young Adult),covishield,"fever, fatigue",1

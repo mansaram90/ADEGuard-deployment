@@ -1,0 +1,5 @@
+0:'B-ADE'
+1:'B-DRUG'
+2:'I-ADE'
+3:'I-DRUG'
+4:'O'

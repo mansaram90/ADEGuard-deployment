@@ -1,0 +1,6 @@
+{
+  "artifact_type": "synthetic_deployment_smoke_test",
+  "task": "token_classification",
+  "clinical_use": false,
+  "description": "Tiny random model for validating ADEGuard loading and deployment only."
+}

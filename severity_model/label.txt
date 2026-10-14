@@ -1,0 +1,3 @@
+0 : 'Severe'
+1 : 'Moderate'
+2 : 'Mild'

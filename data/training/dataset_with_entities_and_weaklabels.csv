@@ -1,0 +1,46 @@
+symptom_combined,SYMPTOM_TEXT,DRUG,ADE,AGE_YRS,DIED,HOSPITAL,L_THREAT,DISABLE,weak_label_id,weak_label
+Patient reported fever and chills after Pfizer booster.,Patient reported fever and chills after Pfizer booster.,Pfizer,"fever; chills",34,N,0,N,N,1,Moderate
+Moderna recipient developed mild injection site pain and redness.,Moderna recipient developed mild injection site pain and redness.,Moderna,"injection site pain; redness",28,N,0,N,N,2,Mild
+After AstraZeneca vaccine the patient experienced nausea and vomiting.,After AstraZeneca vaccine the patient experienced nausea and vomiting.,AstraZeneca,"nausea; vomiting",45,N,0,N,N,1,Moderate
+Covaxin user reported mild rash with itching.,Covaxin user reported mild rash with itching.,Covaxin,"rash; itching",32,N,0,N,N,2,Mild
+Patient was hospitalized after severe allergic reaction to Pfizer.,Patient was hospitalized after severe allergic reaction to Pfizer.,Pfizer,allergic reaction,67,N,1,N,N,0,Severe
+Moderna dose caused fatigue and dizziness for two days.,Moderna dose caused fatigue and dizziness for two days.,Moderna,"fatigue; dizziness",39,N,0,N,N,1,Moderate
+Covishield recipient had low grade fever that resolved quickly.,Covishield recipient had low grade fever that resolved quickly.,Covishield,fever,30,N,0,N,N,2,Mild
+Patient developed shortness of breath after AstraZeneca dose.,Patient developed shortness of breath after AstraZeneca dose.,AstraZeneca,shortness of breath,57,N,0,N,N,1,Moderate
+Pfizer BioNTech vaccine was associated with chest pain.,Pfizer BioNTech vaccine was associated with chest pain.,Pfizer BioNTech,chest pain,61,N,0,N,N,1,Moderate
+Subject reported muscle pain after Moderna vaccination.,Subject reported muscle pain after Moderna vaccination.,Moderna,muscle pain,42,N,0,N,N,1,Moderate
+Covaxin was given and patient later reported body ache.,Covaxin was given and patient later reported body ache.,Covaxin,body ache,36,N,0,N,N,1,Moderate
+After Pfizer booster patient had small localized swelling.,After Pfizer booster patient had small localized swelling.,Pfizer,swelling,25,N,0,N,N,2,Mild
+AstraZeneca recipient complained of blurred vision.,AstraZeneca recipient complained of blurred vision.,AstraZeneca,blurred vision,52,N,0,N,N,1,Moderate
+Moderna shot was followed by joint pain and weakness.,Moderna shot was followed by joint pain and weakness.,Moderna,"joint pain; weakness",49,N,0,N,N,1,Moderate
+Patient had palpitations after Covishield vaccine.,Patient had palpitations after Covishield vaccine.,Covishield,palpitations,63,N,0,N,N,1,Moderate
+Pfizer dose caused mild chest discomfort and fatigue.,Pfizer dose caused mild chest discomfort and fatigue.,Pfizer,"chest discomfort; fatigue",62,N,0,N,N,2,Mild
+Following Moderna vaccination patient reported abdominal pain.,Following Moderna vaccination patient reported abdominal pain.,Moderna,abdominal pain,44,N,0,N,N,1,Moderate
+Janssen vaccine was followed by fainting and emergency evaluation.,Janssen vaccine was followed by fainting and emergency evaluation.,Janssen,fainting,70,N,0,N,N,0,Severe
+Patient experienced critical breathing difficulty after Pfizer.,Patient experienced critical breathing difficulty after Pfizer.,Pfizer,breathing difficulty,73,N,1,Y,N,0,Severe
+Moderna recipient reported numbness and tingling.,Moderna recipient reported numbness and tingling.,Moderna,"numbness; tingling",46,N,0,N,N,1,Moderate
+Covaxin dose led to temporary loss of appetite.,Covaxin dose led to temporary loss of appetite.,Covaxin,loss of appetite,29,N,0,N,N,2,Mild
+AstraZeneca shot caused injection site swelling.,AstraZeneca shot caused injection site swelling.,AstraZeneca,injection site swelling,38,N,0,N,N,1,Moderate
+Subject had sweating after Pfizer vaccination.,Subject had sweating after Pfizer vaccination.,Pfizer,sweating,54,N,0,N,N,1,Moderate
+Patient died after severe reaction and ICU admission.,Patient died after severe reaction and ICU admission.,Unknown,severe reaction,82,Y,1,Y,N,0,Severe
+Moderna shot was administered without immediate side effects.,Moderna shot was administered without immediate side effects.,Moderna,none,29,N,0,N,N,2,Mild
+Patient experienced burning sensation after Covishield dose.,Patient experienced burning sensation after Covishield dose.,Covishield,burning sensation,41,N,0,N,N,1,Moderate
+Pfizer recipient reported injection site tenderness.,Pfizer recipient reported injection site tenderness.,Pfizer,injection site tenderness,33,N,0,N,N,2,Mild
+AstraZeneca vaccine was followed by chest tightness.,AstraZeneca vaccine was followed by chest tightness.,AstraZeneca,chest tightness,58,N,0,N,N,1,Moderate
+Covaxin recipient developed high fever and vomiting.,Covaxin recipient developed high fever and vomiting.,Covaxin,"high fever; vomiting",38,N,0,N,N,1,Moderate
+Patient had life threatening anaphylaxis after Moderna.,Patient had life threatening anaphylaxis after Moderna.,Moderna,anaphylaxis,65,N,1,Y,N,0,Severe
+Mild headache was noted after Johnson and Johnson vaccine.,Mild headache was noted after Johnson and Johnson vaccine.,Johnson and Johnson,headache,40,N,0,N,N,2,Mild
+Patient reported persistent fever after Pfizer dose.,Patient reported persistent fever after Pfizer dose.,Pfizer,fever,50,N,0,N,N,1,Moderate
+Severe chest pain required hospital observation after AstraZeneca.,Severe chest pain required hospital observation after AstraZeneca.,AstraZeneca,chest pain,71,N,1,N,N,0,Severe
+Minor arm soreness occurred after Moderna dose.,Minor arm soreness occurred after Moderna dose.,Moderna,arm soreness,22,N,0,N,N,2,Mild
+Patient developed recurrent vomiting after Covaxin vaccination.,Patient developed recurrent vomiting after Covaxin vaccination.,Covaxin,vomiting,47,N,0,N,N,1,Moderate
+Fatal cardiac arrest occurred after vaccination.,Fatal cardiac arrest occurred after vaccination.,Unknown,cardiac arrest,76,Y,1,Y,N,0,Severe
+Brief chills occurred after Pfizer booster.,Brief chills occurred after Pfizer booster.,Pfizer,chills,31,N,0,N,N,2,Mild
+Moderate rash developed after Moderna vaccine.,Moderate rash developed after Moderna vaccine.,Moderna,rash,43,N,0,N,N,1,Moderate
+Patient was admitted with extreme weakness after Covishield.,Patient was admitted with extreme weakness after Covishield.,Covishield,weakness,68,N,1,N,Y,0,Severe
+Light dizziness occurred after AstraZeneca vaccine.,Light dizziness occurred after AstraZeneca vaccine.,AstraZeneca,dizziness,27,N,0,N,N,2,Mild
+Ongoing joint pain was reported after Pfizer vaccination.,Ongoing joint pain was reported after Pfizer vaccination.,Pfizer,joint pain,55,N,0,N,N,1,Moderate
+Patient became unresponsive after vaccine and was hospitalized.,Patient became unresponsive after vaccine and was hospitalized.,Unknown,unresponsive,79,N,1,Y,N,0,Severe
+Mild redness at injection site followed Moderna vaccine.,Mild redness at injection site followed Moderna vaccine.,Moderna,redness,24,N,0,N,N,2,Mild
+Significant abdominal pain followed Covaxin dose.,Significant abdominal pain followed Covaxin dose.,Covaxin,abdominal pain,59,N,0,N,N,1,Moderate
+Patient had severe shortness of breath and emergency care after Pfizer.,Patient had severe shortness of breath and emergency care after Pfizer.,Pfizer,shortness of breath,66,N,1,Y,N,0,Severe

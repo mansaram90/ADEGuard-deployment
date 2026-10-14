@@ -1,0 +1,280 @@
+Patient O
+reported O
+fever B-ADE
+and O
+chills B-ADE
+after O
+Pfizer B-DRUG
+booster O
+. O
+
+Moderna B-DRUG
+recipient O
+developed O
+injection B-ADE
+site I-ADE
+pain I-ADE
+and O
+redness B-ADE
+. O
+
+After O
+AstraZeneca B-DRUG
+vaccine O
+the O
+patient O
+experienced O
+nausea B-ADE
+and O
+vomiting B-ADE
+. O
+
+Covaxin B-DRUG
+user O
+reported O
+rash B-ADE
+with O
+severe O
+itching B-ADE
+. O
+
+Patient O
+received O
+Johnson B-DRUG
+and I-DRUG
+Johnson I-DRUG
+vaccine O
+and O
+had O
+headache B-ADE
+. O
+
+Pfizer B-DRUG
+shot O
+was O
+followed O
+by O
+mild O
+arm B-ADE
+pain I-ADE
+. O
+
+Moderna B-DRUG
+dose O
+caused O
+fatigue B-ADE
+and O
+dizziness B-ADE
+. O
+
+Covishield B-DRUG
+recipient O
+had O
+low O
+grade O
+fever B-ADE
+. O
+
+Patient O
+developed O
+shortness B-ADE
+of I-ADE
+breath I-ADE
+after O
+AstraZeneca B-DRUG
+dose O
+. O
+
+Pfizer B-DRUG
+BioNTech I-DRUG
+vaccine O
+was O
+associated O
+with O
+chest B-ADE
+pain I-ADE
+. O
+
+The O
+subject O
+reported O
+muscle B-ADE
+pain I-ADE
+after O
+Moderna B-DRUG
+vaccination O
+. O
+
+Covaxin B-DRUG
+was O
+given O
+and O
+the O
+patient O
+later O
+reported O
+body B-ADE
+ache I-ADE
+. O
+
+After O
+the O
+Pfizer B-DRUG
+booster O
+the O
+patient O
+had O
+swelling B-ADE
+. O
+
+AstraZeneca B-DRUG
+recipient O
+complained O
+of O
+blurred B-ADE
+vision I-ADE
+. O
+
+Moderna B-DRUG
+shot O
+was O
+followed O
+by O
+joint B-ADE
+pain I-ADE
+and O
+weakness B-ADE
+. O
+
+The O
+patient O
+had O
+palpitations B-ADE
+after O
+Covishield B-DRUG
+vaccine O
+. O
+
+Pfizer B-DRUG
+dose O
+caused O
+mild O
+chest B-ADE
+discomfort I-ADE
+. O
+
+Following O
+Moderna B-DRUG
+vaccination O
+the O
+patient O
+reported O
+abdominal B-ADE
+pain I-ADE
+. O
+
+Janssen B-DRUG
+vaccine O
+was O
+followed O
+by O
+fainting B-ADE
+. O
+
+Patient O
+was O
+hospitalized O
+after O
+severe O
+allergic B-ADE
+reaction I-ADE
+to O
+Pfizer B-DRUG
+. O
+
+Moderna B-DRUG
+recipient O
+reported O
+numbness B-ADE
+and O
+tingling B-ADE
+. O
+
+Covaxin B-DRUG
+dose O
+led O
+to O
+loss B-ADE
+of I-ADE
+appetite I-ADE
+. O
+
+AstraZeneca B-DRUG
+shot O
+caused O
+injection B-ADE
+site I-ADE
+swelling I-ADE
+. O
+
+The O
+subject O
+had O
+sweating B-ADE
+after O
+Pfizer B-DRUG
+vaccination O
+. O
+
+Patient O
+passed O
+away B-ADE
+after O
+the O
+vaccine O
+. O
+
+Moderna B-DRUG
+shot O
+was O
+administered O
+without O
+immediate O
+side O
+effects O
+. O
+
+Patient O
+experienced O
+burning B-ADE
+sensation I-ADE
+after O
+Covishield B-DRUG
+dose O
+. O
+
+Pfizer B-DRUG
+recipient O
+reported O
+injection B-ADE
+site I-ADE
+tenderness I-ADE
+. O
+
+AstraZeneca B-DRUG
+vaccine O
+was O
+followed O
+by O
+chest B-ADE
+tightness I-ADE
+. O
+
+Covaxin B-DRUG
+recipient O
+developed O
+high B-ADE
+fever I-ADE
+and O
+vomiting B-ADE
+. O
