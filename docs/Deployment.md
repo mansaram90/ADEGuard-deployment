@@ -134,6 +134,48 @@ Open the generated API docs:
 http://127.0.0.1:8000/docs
 ```
 
+## Standalone Frontend (Local Demo)
+
+The browser UI lives in `frontend/` and uses plain HTML, CSS, and JavaScript.
+It sends JSON to FastAPI's `/predict` endpoint; models remain in the backend.
+No Node.js packages or frontend build step are required.
+
+From the project root, start the API in one terminal:
+
+```powershell
+python -m uvicorn src.api:app --host 127.0.0.1 --port 8000
+```
+
+In a second terminal, from the same project root, serve only the frontend folder:
+
+```powershell
+python -m http.server 8080 --bind 127.0.0.1 --directory frontend
+```
+
+Open http://127.0.0.1:8080 in your browser. Select **Use sample**, then
+**Analyze text**. Entity lists, a severity label, and probability bars should
+appear. These values come from random synthetic models and have no clinical
+meaning. Use fictional reports for this demo.
+
+The JavaScript API address is `http://127.0.0.1:8000`. FastAPI permits browser
+requests from `http://127.0.0.1:8080` and `http://localhost:8080` using CORS.
+An origin includes scheme, hostname, and port. Opening `index.html` directly
+or choosing a different frontend port will not match this policy. CORS is not
+authentication and does not prevent requests from non-browser clients.
+
+If the UI cannot reach the API, verify `/ready` at port 8000, the two terminal
+processes, and the browser URL. Restart the API after code changes. A Docker
+backend also needs rebuilding to include the new CORS configuration.
+
+Manual checks: submit sample text, check that empty/whitespace input is
+rejected, resize the browser, navigate with the keyboard, and stop the API
+before submitting again to verify the connection error message. Editing text
+hides previous results so they cannot be mistaken for results for the new text.
+Use `Ctrl+C` in each terminal to stop the servers.
+
+The frontend is local-only in this phase. Frontend containers, hosting, and
+expanded CI are separate future steps.
+
 ## API Checks
 
 In another terminal, check process health:
