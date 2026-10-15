@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 try:
@@ -78,6 +79,14 @@ app = FastAPI(
     description="Inference API for ADE entity extraction and severity prediction.",
     version="0.1.0",
     lifespan=lifespan,
+)
+
+# The standalone local frontend runs on a different port from this API.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://127.0.0.1:8080", "http://localhost:8080"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
 

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="ADEGuard demo: explore adverse drug event extraction and severity predictions.">
+  <title>ADEGuard | Text analysis</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./"><span class="brand-icon" aria-hidden="true">A</span>ADEGuard</a>
+    <span class="badge">Deployment demo</span>
+  </header>
+  <main>
+    <section class="intro">
+      <p class="eyebrow">ADVERSE DRUG EVENT ANALYSIS</p>
+      <h1>From text to insight.</h1>
+      <p class="subtitle">Explore entity extraction and severity classification in one place.</p>
+    </section>
+    <aside class="notice"><strong>Synthetic models · Demo only</strong><p>These tiny, randomly initialized models test the application pipeline. Their predictions and confidence scores are not clinically meaningful. Do not use them for medical decisions.</p></aside>
+    <div class="workspace">
+      <section class="panel">
+        <div class="panel-heading"><span class="step">01</span><h2>Enter a report</h2></div>
+        <p class="muted">Use fictional text to explore the demo.</p>
+        <form id="prediction-form">
+          <label for="report">Report text</label>
+          <textarea id="report" name="text" rows="8" maxlength="5000" required placeholder="Patient reported fever after Pfizer booster." aria-describedby="text-help"></textarea>
+          <div class="input-footer"><span id="text-help">Up to 5,000 characters</span><span id="character-count">0 / 5,000</span></div>
+          <div class="actions"><button id="analyze" type="submit">Analyze text <span aria-hidden="true">→</span></button><button id="sample" class="secondary" type="button">Use sample</button></div>
+        </form>
+        <p id="status" class="status" role="status" aria-live="polite">Ready for your text.</p>
+      </section>
+      <section class="panel" id="results-panel" aria-busy="false">
+        <div class="panel-heading"><span class="step">02</span><h2>Explore results</h2></div>
+        <div id="empty-state" class="empty-state"><span class="empty-icon" aria-hidden="true">↗</span><h3>Your analysis appears here</h3><p>Enter a report and select Analyze text to see the model response.</p></div>
+        <div id="results" hidden>
+          <p class="result-note">Demo output · Not a clinical assessment</p>
+          <h3>Adverse drug events</h3><ul id="ade-entities" class="entities"></ul>
+          <h3>Drugs</h3><ul id="drug-entities" class="entities"></ul>
+          <div class="severity-heading"><h3>Severity</h3><span id="severity-label" class="badge"></span></div>
+          <p class="muted">Model probabilities</p>
+          <div id="probabilities"></div>
+        </div>
+      </section>
+    </div>
+    <footer>ADEGuard <span aria-hidden="true">/</span> Learning demo powered by a separate FastAPI backend.</footer>
+  </main>
+</body>
+</html>
