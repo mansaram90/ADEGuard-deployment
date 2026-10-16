@@ -421,13 +421,46 @@ If `/predict` returns odd labels or entity spans, remember that this is expected
 with the synthetic demo artifacts. The current purpose is deployment validation,
 not clinical prediction quality.
 
+## CI Integration Smoke Test
+
+On pushes and pull requests, GitHub Actions first runs backend tests. If they
+pass, the Docker job validates Compose, builds both images, and starts the
+stack with a 240-second readiness timeout. `scripts/smoke_test.py` uses only
+Python's standard library to check the frontend page and assets, API readiness,
+browser CORS preflight, and a fictional prediction's response structure.
+It checks severity probabilities are finite, between 0 and 1, sum to 1, and
+agree with the returned label and confidence. It does not require any specific
+predicted entities or severity label from these synthetic models.
+
+To reproduce locally, ensure ports 8000 and 8080 are free, then run each command
+from the project root. Stop if validation or building fails:
+
+```powershell
+docker compose config --quiet
+docker compose build
+docker compose up -d --wait --wait-timeout 240
+python scripts/smoke_test.py
+```
+
+A nonzero exit code means a check failed. Inspect logs before cleanup:
+
+```powershell
+docker compose ps --all
+docker compose logs --no-color --tail 100
+docker compose down --remove-orphans
+```
+
+Always run cleanup after testing, including when startup or HTTP checks fail.
+CI prints container status and logs on failure and schedules cleanup with
+`if: always()`. This cleanup is best effort if the runner is forcibly stopped.
+The smoke test does not execute browser JavaScript, check visual layout, or
+evaluate model quality. A green local test does not establish that the remote
+Actions run passed; check that run after pushing.
+
 ## Next Steps
 
-Backend tests and a backend Docker build are configured in GitHub Actions.
-The standalone frontend and Compose configuration can be validated locally.
-The next CI step is to build the frontend image and add a Compose smoke test
-that waits for readiness and checks a prediction. Cloud deployment remains
-out of scope until explicitly approved.
+Frontend browser interaction tests and model evaluation are separate future
+checks. Cloud deployment remains out of scope until explicitly approved.
 
 Later production-readiness work:
 
