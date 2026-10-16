@@ -173,8 +173,64 @@ before submitting again to verify the connection error message. Editing text
 hides previous results so they cannot be mistaken for results for the new text.
 Use `Ctrl+C` in each terminal to stop the servers.
 
-The frontend is local-only in this phase. Frontend containers, hosting, and
-expanded CI are separate future steps.
+The frontend is local-only in this phase. See Docker Compose below to run both
+services in containers. Hosting and expanded CI are separate future steps.
+
+## Run Both Services with Docker Compose
+
+Docker Compose describes multiple services in one YAML file. `compose.yaml`
+builds the API using the existing root Dockerfile and the frontend using
+`frontend/Dockerfile`. Nginx serves the static HTML, CSS, and JavaScript.
+Docker Desktop must be running with Linux containers enabled.
+
+Stop the manually started API and frontend servers with `Ctrl+C` in their
+respective terminals first. Ports 8000 and 8080 must be free. From the project
+root, validate the configuration and start both services:
+
+```powershell
+docker compose config --quiet
+docker compose up --build
+```
+
+`--build` builds the images before starting containers, reusing unchanged
+cached layers. Leave this terminal open to see logs. The first build needs
+network access to download base images and Python dependencies.
+
+Compose checks the API's `/ready` endpoint and waits for `ready: true` before
+starting the frontend. This gives model loading time to finish. The frontend
+also has an HTTP health check. In a second terminal, inspect service status:
+
+```powershell
+docker compose ps
+```
+
+Open http://127.0.0.1:8080 and select **Use sample**, then **Analyze text**.
+The API remains available at http://127.0.0.1:8000/docs. Both published ports
+are bound to loopback for local use only. Predictions still use the synthetic
+demo models and are not clinically meaningful.
+
+Although Compose creates a container network, the JavaScript executes in your
+host browser. Its API address therefore remains `http://127.0.0.1:8000`, the
+published host port. The name `api` is resolvable between Compose containers,
+but is not the API hostname for your browser. The existing local CORS policy
+continues to allow the frontend on port 8080.
+
+Useful commands from the project root:
+
+```powershell
+docker compose logs --tail 100 api
+docker compose logs --tail 100 frontend
+docker compose down
+```
+
+`down` stops and removes this Compose project's containers and network; it
+retains built images and repository files. For background startup instead,
+use `docker compose up --build -d --wait`; use `down` when finished.
+
+If a port is already allocated, stop the earlier local server or container
+using it. If the API becomes unhealthy, inspect its logs and model paths.
+The startup dependency does not continuously restart services or disable the
+frontend when the API later fails; the UI still handles connection errors.
 
 ## API Checks
 
@@ -367,13 +423,11 @@ not clinical prediction quality.
 
 ## Next Steps
 
-Recommended next phase: CI/CD with GitHub Actions.
-
-Initial CI/CD goals:
-
-- run `pytest` on push and pull request
-- optionally build the Docker image
-- keep cloud deployment out of scope until explicitly approved
+Backend tests and a backend Docker build are configured in GitHub Actions.
+The standalone frontend and Compose configuration can be validated locally.
+The next CI step is to build the frontend image and add a Compose smoke test
+that waits for readiness and checks a prediction. Cloud deployment remains
+out of scope until explicitly approved.
 
 Later production-readiness work:
 
