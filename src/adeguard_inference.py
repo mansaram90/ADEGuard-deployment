@@ -27,6 +27,22 @@ except ImportError:
 NER_ID2LABEL = {0: "B-ADE", 1: "B-DRUG", 2: "I-ADE", 3: "I-DRUG", 4: "O"}
 SEVERITY_ID2LABEL = {0: "Severe", 1: "Moderate", 2: "Mild"}
 
+
+class InputValidationError(ValueError):
+    """Text cannot be analyzed in full by the loaded model."""
+
+
+def validate_encoded_length(encoded: Any, model: Any, tokenizer: Any, task: str) -> None:
+    # Count special tokens too. Keep the existing 512-token serving ceiling,
+    # but respect smaller model/tokenizer limits such as our tiny demo's 128.
+    limit = min(512, model.config.max_position_embeddings, tokenizer.model_max_length)
+    token_count = encoded["input_ids"].shape[-1]
+    if token_count > limit:
+        raise InputValidationError(
+            f"Text is too long for the {task} model: {token_count} tokens; "
+            f"maximum {limit}, including special tokens. Shorten the text and try again."
+        )
+
 POSTPROCESS_DICT = {
     "DRUG": {
         "pfizer",
@@ -165,14 +181,17 @@ class NERModel:
         return cls(tokenizer=tokenizer, model=model, device=device)
 
     def predict_one(self, text: str) -> NERPrediction:
+        if not text.strip():
+            raise InputValidationError("Enter non-whitespace text to analyze.")
         tokens = re.findall(r"\w+|[^\w\s]", text)
         encoded = self.tokenizer(
             tokens,
             is_split_into_words=True,
-            truncation=True,
-            max_length=512,
+            truncation=False,
             return_tensors="pt",
-        ).to(self.device)
+        )
+        validate_encoded_length(encoded, self.model, self.tokenizer, "NER")
+        encoded = encoded.to(self.device)
 
         with torch.no_grad():
             outputs = self.model(**encoded)
@@ -247,13 +266,16 @@ class SeverityModel:
         return cls(tokenizer=tokenizer, model=model, device=device)
 
     def predict(self, text: str) -> SeverityPrediction:
+        if not text.strip():
+            raise InputValidationError("Enter non-whitespace text to analyze.")
         encoded = self.tokenizer(
             text,
-            truncation=True,
-            max_length=512,
+            truncation=False,
             padding=True,
             return_tensors="pt",
-        ).to(self.device)
+        )
+        validate_encoded_length(encoded, self.model, self.tokenizer, "severity")
+        encoded = encoded.to(self.device)
 
         with torch.no_grad():
             outputs = self.model(**encoded)

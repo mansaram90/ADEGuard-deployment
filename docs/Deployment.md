@@ -234,6 +234,22 @@ frontend when the API later fails; the UI still handles connection errors.
 
 ## API Checks
 
+### Input validation
+
+The API accepts at most 5,000 characters and rejects whitespace-only text.
+There is also a separate token limit: each inference path checks the full
+tokenized input, including special tokens, against the smallest of the model's
+position capacity, tokenizer limit, and the existing 512-token serving ceiling.
+The current tiny BERT models support 128 positions. Word count and character
+count are not reliable token counts because tokenizers can split words.
+
+Oversized text returns HTTP 422 with a message giving the token count and
+limit. Input is not silently truncated. The frontend displays the validation
+message so the user can shorten the report. Other consumers of the shared
+inference classes receive `InputValidationError` for oversized or blank text.
+This changes the earlier truncation behavior for long input; short valid
+prediction behavior is preserved.
+
 In another terminal, check process health:
 
 ```powershell
