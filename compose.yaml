@@ -28,3 +28,34 @@ services:
       interval: 5s
       timeout: 5s
       retries: 3
+
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    profiles: ["monitoring"]
+    ports:
+      - "127.0.0.1:9090:9090"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=24h
+      - --storage.tsdb.retention.size=512MB
+    volumes:
+      - type: bind
+        source: ./monitoring/prometheus.yml
+        target: /etc/prometheus/prometheus.yml
+        read_only: true
+        bind:
+          create_host_path: false
+      - prometheus-data:/prometheus
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:9090/-/ready"]
+      interval: 5s
+      timeout: 5s
+      start_period: 15s
+      retries: 12
+
+volumes:
+  prometheus-data:
