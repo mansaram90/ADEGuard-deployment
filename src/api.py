@@ -13,9 +13,11 @@ from pydantic import BaseModel, Field
 try:
     from .adeguard_inference import InputValidationError, NERModel, SeverityModel
     from .config import C_MODEL_PATH, model_path
+    from .request_logging import RequestLoggingMiddleware
 except ImportError:
     from adeguard_inference import InputValidationError, NERModel, SeverityModel
     from config import C_MODEL_PATH, model_path
+    from request_logging import RequestLoggingMiddleware
 
 
 class PredictRequest(BaseModel):
@@ -87,7 +89,10 @@ app.add_middleware(
     allow_origins=["http://127.0.0.1:8080", "http://localhost:8080"],
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
+    expose_headers=["X-Request-ID"],
 )
+# Added last so it wraps CORS too, including preflight requests.
+app.add_middleware(RequestLoggingMiddleware)
 
 
 @app.get("/health", response_model=HealthResponse)
