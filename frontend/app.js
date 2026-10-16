@@ -95,6 +95,16 @@ form.addEventListener("submit", async (event) => {
       signal: controller.signal,
     });
     if (!response.ok) {
+      if (response.status === 422) {
+        const errorBody = await response.json();
+        const detail = errorBody.detail;
+        const message = typeof detail === "string"
+          ? detail
+          : Array.isArray(detail)
+            ? detail.map((item) => item.msg).join(" ")
+            : "Check the text and try again.";
+        throw new Error(message);
+      }
       throw new Error(`Analysis failed (HTTP ${response.status}). Try again after checking the API.`);
     }
     const prediction = await response.json();

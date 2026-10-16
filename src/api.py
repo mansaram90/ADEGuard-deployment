@@ -11,10 +11,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 try:
-    from .adeguard_inference import NERModel, SeverityModel
+    from .adeguard_inference import InputValidationError, NERModel, SeverityModel
     from .config import C_MODEL_PATH, model_path
 except ImportError:
-    from adeguard_inference import NERModel, SeverityModel
+    from adeguard_inference import InputValidationError, NERModel, SeverityModel
     from config import C_MODEL_PATH, model_path
 
 
@@ -119,8 +119,11 @@ def predict(request: PredictRequest, fastapi_request: Request) -> PredictRespons
     if not hasattr(fastapi_request.app.state, "severity_model"):
         raise HTTPException(status_code=503, detail="Severity model is not loaded")
 
-    ner_prediction = fastapi_request.app.state.ner_model.predict_one(request.text)
-    severity_prediction = fastapi_request.app.state.severity_model.predict(request.text)
+    try:
+        ner_prediction = fastapi_request.app.state.ner_model.predict_one(request.text)
+        severity_prediction = fastapi_request.app.state.severity_model.predict(request.text)
+    except InputValidationError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
     return PredictResponse(
         text=request.text,
