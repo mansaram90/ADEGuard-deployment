@@ -4,6 +4,19 @@ import pytest
 from src.api import app
 
 
+def test_metrics_endpoint_exposes_api_request_counts():
+    labels = {"method": "GET", "path": "/health", "status_code": "200"}
+    registry = app.state.metrics.registry
+    before = registry.get_sample_value("adeguard_http_requests_total", labels) or 0
+    with TestClient(app) as client:
+        assert client.get("/health").status_code == 200
+        response = client.get("/metrics")
+    assert response.status_code == 200
+    assert "adeguard_http_requests_total" in response.text
+    assert "adeguard_http_request_duration_seconds_bucket" in response.text
+    assert registry.get_sample_value("adeguard_http_requests_total", labels) == before + 1
+
+
 @pytest.mark.parametrize("text", [" \n\t ", " ".join(["patient"] * 127), "x" * 5001])
 def test_predict_rejects_invalid_input_with_cors(text):
     origin = "http://127.0.0.1:8080"

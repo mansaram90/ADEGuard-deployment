@@ -510,6 +510,65 @@ Startup failures before HTTP serving and requests that never reach the API
 cannot produce these request records. Logging does not add metrics, dashboards,
 alerts, persistent log storage, or distributed tracing.
 
+## Request Metrics
+
+The API exposes Prometheus text-format metrics at
+http://127.0.0.1:8000/metrics using `prometheus-client`. Install updated serving
+requirements for local runs and rebuild the API image for Docker runs.
+
+```powershell
+python -m pip install -r requirements-api.txt
+docker compose up --build
+```
+
+From a second terminal:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/health
+(Invoke-WebRequest http://127.0.0.1:8000/metrics -UseBasicParsing).Content
+```
+
+`adeguard_http_requests_total` counts requests by `method`, route-template
+`path`, and `status_code`. For example, a successful prediction increases the
+POST `/predict` series with status 200; rejected input increases status 422.
+Error counts can be derived from 4xx and 5xx status labels without duplicating
+the same information in separate error counters.
+
+`adeguard_http_request_duration_seconds` is a histogram labelled by method and
+route. Its `_bucket` series count observations at or below each time threshold;
+`_count` gives the number of observations and `_sum` their total seconds.
+The histogram includes a `+Inf` bucket. `_sum / _count` yields a cumulative
+average for that series when count is nonzero; histogram buckets can support
+approximate percentiles once a collector and queries are configured.
+
+Metrics middleware measures elapsed downstream ASGI time, including the inner
+logging middleware. This is not isolated model inference time or browser
+latency. It records failures in `finally`, preserving exceptions. Failures
+before any response default to status 500; if a response already started, its
+sent status remains the label even if a later exception occurs.
+
+Labels exclude report text, predictions, query strings, raw URL parameter
+values, and request IDs. Unknown paths use `<unmatched>` and nonstandard methods
+use `OTHER`. Normal health/readiness probes and preflight requests are counted;
+filter by path/method when looking specifically at prediction traffic. Requests
+to `/metrics` (including its trailing-slash form) do not increment these
+measurements. Existing request logging still records scrapes.
+
+An explicit registry contains only the application metrics, not the client's
+default Python/process collectors. The current implementation is in-memory
+and process-local: counters reset on API restart and are not aggregated across
+multiple Uvicorn workers or replicas. Keep the current single-worker setup;
+scaling requires a deliberate metrics aggregation design. Labelled series
+appear after their first observation, not necessarily on an untouched startup.
+
+No Prometheus server, historical storage, dashboards, alerts, or authentication
+has been added. The endpoint is available to callers who can reach this local
+API; review access before future public hosting. The HTTP smoke test now checks
+that `/metrics` contains a successful prediction counter and duration observation,
+so CI exercises the packaged endpoint as well as the in-process tests.
+Exposing telemetry does not
+measure model accuracy, calibration, drift, or clinical correctness.
+
 ## Next Steps
 
 Frontend browser interaction tests and model evaluation are separate future
@@ -519,8 +578,8 @@ Later production-readiness work:
 
 - replace demo artifacts with real validated model artifacts
 - add model versioning and artifact provenance
-- add request logging and monitoring
-- add structured error handling and observability
+- collect existing request logs and metrics in a monitoring system
+- define operational dashboards and alerts
 - add security review for public deployment
 - add image publishing to a registry
 - add cloud deployment only after explicit approval

@@ -8,16 +8,19 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 try:
     from .adeguard_inference import InputValidationError, NERModel, SeverityModel
     from .config import C_MODEL_PATH, model_path
     from .request_logging import RequestLoggingMiddleware
+    from .metrics import RequestMetrics, RequestMetricsMiddleware
 except ImportError:
     from adeguard_inference import InputValidationError, NERModel, SeverityModel
     from config import C_MODEL_PATH, model_path
     from request_logging import RequestLoggingMiddleware
+    from metrics import RequestMetrics, RequestMetricsMiddleware
 
 
 class PredictRequest(BaseModel):
@@ -91,8 +94,15 @@ app.add_middleware(
     allow_headers=["Content-Type"],
     expose_headers=["X-Request-ID"],
 )
-# Added last so it wraps CORS too, including preflight requests.
+# Wrap CORS too, including preflight requests.
 app.add_middleware(RequestLoggingMiddleware)
+app.state.metrics = RequestMetrics()
+app.add_middleware(RequestMetricsMiddleware, metrics=app.state.metrics)
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics(request: Request) -> Response:
+    return request.app.state.metrics.response()
 
 
 @app.get("/health", response_model=HealthResponse)
