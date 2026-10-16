@@ -94,6 +94,17 @@ def run_checks(api_url: str, frontend_url: str) -> None:
     validate_prediction(json.loads(content))
     print("PASS: prediction structure, probabilities, and CORS response", flush=True)
 
+    content, headers = request(api_url + "/metrics")
+    require(headers.get("Content-Type", "").startswith("text/plain"), "Metrics must use Prometheus text format")
+    lines = content.decode("utf-8").splitlines()
+    for metric_name, required_labels in (
+        ("adeguard_http_requests_total", ('method="POST"', 'path="/predict"', 'status_code="200"')),
+        ("adeguard_http_request_duration_seconds_count", ('method="POST"', 'path="/predict"')),
+    ):
+        matching = [line for line in lines if line.startswith(metric_name + "{") and all(label in line for label in required_labels)]
+        require(bool(matching) and float(matching[0].rsplit(" ", 1)[1]) >= 1, f"Missing prediction measurement: {metric_name}")
+    print("PASS: metrics expose successful prediction count and duration observation", flush=True)
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
