@@ -56,6 +56,9 @@ def test_local_frontend_cors_preflight(origin):
     assert "POST" in response.headers["access-control-allow-methods"]
     assert prediction.status_code == 200
     assert prediction.headers["access-control-allow-origin"] == origin
+    assert response.headers["X-Request-ID"]
+    assert prediction.headers["X-Request-ID"]
+    assert "x-request-id" in prediction.headers["access-control-expose-headers"].lower()
 
 
 def test_cors_rejects_unapproved_origin():
