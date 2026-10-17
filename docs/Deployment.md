@@ -569,6 +569,121 @@ so CI exercises the packaged endpoint as well as the in-process tests.
 Exposing telemetry does not
 measure model accuracy, calibration, drift, or clinical correctness.
 
+## Optional Local Prometheus Collector
+
+The API's `/metrics` endpoint exposes current process measurements. Prometheus
+periodically scrapes that endpoint and stores samples, enabling queries across
+time. The optional `monitoring` profile adds a collector without changing the
+default two-service application or existing CI startup command.
+
+From the project root, with Docker Desktop running and ports 8000, 8080, and
+9090 free:
+
+```powershell
+docker compose --profile monitoring config --quiet
+docker compose --profile monitoring run --rm --no-deps --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml
+docker compose --profile monitoring up --build -d --wait --wait-timeout 240
+docker compose --profile monitoring ps
+```
+
+`promtool` validates the mounted configuration, including its schema. `up`
+starts the API/frontend and waits for API readiness before starting Prometheus.
+An ordinary `docker compose up --build` does not enable monitoring unless the
+profile is enabled separately (for example through `COMPOSE_PROFILES`).
+
+Open http://127.0.0.1:9090. Check the Targets page (typically
+http://127.0.0.1:9090/targets) for job `adeguard-api` to be UP. Collector readiness
+at http://127.0.0.1:9090/-/ready and a healthy container do not by themselves
+prove successful API scraping: the target must also be UP.
+
+`monitoring/prometheus.yml` scrapes `api:8000/metrics` every 15 seconds, with a
+five-second scrape timeout. `api` is Compose's internal DNS name. A collector
+target of `localhost:8000` would point at the Prometheus container, not FastAPI.
+Host-published port 8000 is for host/browser access and is not needed for this
+container-to-container connection.
+
+Generate prediction traffic using the frontend or:
+
+```powershell
+python scripts/smoke_test.py
+```
+
+Wait at least 15 seconds for the next scrape. In the Prometheus query interface,
+try these PromQL expressions:
+
+```promql
+up{job="adeguard-api"}
+```
+
+Value 1 means the latest scrape succeeded; 0 means it failed.
+
+```promql
+adeguard_http_requests_total{job="adeguard-api",path="/predict"}
+```
+
+This shows sampled request counters split by method/status. Missing prediction
+series can simply mean no predictions have been made and scraped yet.
+
+```promql
+sum(rate(adeguard_http_requests_total{job="adeguard-api",method="POST",path="/predict"}[5m]))
+sum(rate(adeguard_http_requests_total{job="adeguard-api",method="POST",path="/predict",status_code=~"5.."}[5m]))
+```
+
+These are prediction requests per second and server-error requests per second.
+Use `status_code=~"4.."` separately for client/input rejections. An absent
+server-error series is not a collector failure and may produce no query result
+rather than an explicit zero.
+
+```promql
+sum(rate(adeguard_http_request_duration_seconds_sum{job="adeguard-api",method="POST",path="/predict"}[5m]))
+/
+sum(rate(adeguard_http_request_duration_seconds_count{job="adeguard-api",method="POST",path="/predict"}[5m]))
+```
+
+This estimates average prediction request duration in seconds over the window.
+Rate-based queries need at least two samples and traffic in the selected
+window to produce useful values. Zero observations can yield NaN for the
+average. Low demo traffic is not a reliable latency benchmark.
+
+### Persistence and cleanup
+
+The fixed image tag `prom/prometheus:v3.14.0` identifies the collector version;
+it is not an immutable digest pin. A named volume, `prometheus-data`, stores
+samples at `/prometheus`, scoped to the Compose project name. Configuration is
+mounted read-only. Retention is configured for 24 hours or 512 MB of retained
+blocks, whichever limit is reached first. Retention is not a strict total-disk
+quota: active data and the write-ahead log also consume storage.
+
+```powershell
+docker compose --profile monitoring restart prometheus
+docker compose --profile monitoring logs --tail 100 prometheus
+docker compose --profile monitoring down --remove-orphans
+```
+
+Restart or normal `down` retains the named volume. Reusing the same Compose
+project reconnects it, so previously stored samples remain within retention.
+Changing the project name uses a different volume/history. API counters still
+reset when the API process restarts; collector persistence does not make the
+application counters persistent. Prometheus rate functions account for
+observed counter resets.
+
+For disposable validation only, use a distinct project name on every command:
+
+```powershell
+docker compose -p adeguard-prometheus-check --profile monitoring up --build -d --wait --wait-timeout 240
+docker compose -p adeguard-prometheus-check --profile monitoring down --remove-orphans --volumes
+```
+
+The final command deletes that test project's collector history as well as its
+containers/network. Use `--volumes` only when intentionally discarding those
+samples; omit it to preserve normal learning history. A separate project name
+does not avoid host-port conflicts. Existing application smoke tests do not
+verify collector targets, historical queries, or persistence; these are
+separate monitoring validation checks in this phase.
+
+This is local monitoring with no authentication, Grafana, alert rules, or
+Alertmanager. Port 9090 is bound to loopback. No cloud resources are deployed.
+
 ## Next Steps
 
 Frontend browser interaction tests and model evaluation are separate future
@@ -578,7 +693,7 @@ Later production-readiness work:
 
 - replace demo artifacts with real validated model artifacts
 - add model versioning and artifact provenance
-- collect existing request logs and metrics in a monitoring system
+- centralize application logs separately from collected Prometheus metrics
 - define operational dashboards and alerts
 - add security review for public deployment
 - add image publishing to a registry
