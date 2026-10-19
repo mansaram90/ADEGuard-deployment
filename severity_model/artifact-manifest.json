@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "version": "demo-severity-v1",
+  "task": "sequence_classification",
+  "files": {
+    "ADEGUARD_DEMO_ARTIFACT.json": "8ba7715924f88243365e48e69b065a26350b21bd259ff08eb1a2432b8c20fefc",
+    "config.json": "e5911aee7e44e3d281820aa3adaf0ee562df7ec8578bff4942f5255745d5548c",
+    "label.txt": "9bcd424dacc0e2728e861849bee45cc5c43b95e8bf694a206b15a9eb2ca72921",
+    "model.safetensors": "c904528145ad633882c392076773ea47ea9ab27bc33b8ea047f92ab3fa6798f9",
+    "tokenizer.json": "1de407b2e0582631f39342925a3abe25d3dbad04d8caa2ff286cf097f5180653",
+    "tokenizer_config.json": "f3b923d63d9d8f22eb928febb2e8d6b0d29dd581c3fc113d2651f6306b4260df"
+  }
+}

@@ -70,6 +70,15 @@ def run_checks(api_url: str, frontend_url: str) -> None:
     require(json.loads(content).get("ready") is True, "API is not ready")
     print("PASS: API readiness", flush=True)
 
+    content, _ = request(api_url + "/model-info")
+    info = json.loads(content)
+    for task in ("ner", "severity"):
+        require(bool(info.get(task + "_version")), f"Missing {task} artifact version")
+        fingerprint = info.get(task + "_manifest_sha256", "")
+        require(len(fingerprint) == 64 and all(c in "0123456789abcdef" for c in fingerprint),
+                f"Invalid {task} manifest identity")
+    print("PASS: loaded model artifact versions and identities", flush=True)
+
     _, headers = request(
         api_url + "/predict",
         method="OPTIONS",

@@ -112,6 +112,10 @@ def test_model_info_endpoint_marks_demo_artifacts():
     body = response.json()
     assert body["ner_artifact_type"] == "synthetic_deployment_smoke_test"
     assert body["severity_artifact_type"] == "synthetic_deployment_smoke_test"
+    assert body["ner_version"] == "demo-ner-v1"
+    assert body["severity_version"] == "demo-severity-v1"
+    assert len(body["ner_manifest_sha256"]) == 64
+    assert len(body["severity_manifest_sha256"]) == 64
 
 
 def test_predict_endpoint_returns_entities_and_severity():

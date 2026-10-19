@@ -1,0 +1,3 @@
+# Model manifests hash exact bytes. Disable text conversion across platforms.
+ner_model/** -text
+severity_model/** -text

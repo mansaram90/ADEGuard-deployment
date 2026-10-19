@@ -1024,6 +1024,70 @@ observer's real HTTP validation tests. Monitoring CI currently does not start
 Grafana or verify its panels, test webhook retries against a failed observer,
 test notification-state persistence, or prove delivery to an external person.
 
+## Model Artifact Versions and Startup Integrity
+
+Both API model directories must contain `artifact-manifest.json`. The checked-in
+synthetic packages are `demo-ner-v1` and `demo-severity-v1`; these names describe
+deployment test artifacts, not trained or clinically validated releases.
+
+Each manifest contains schema version 1, a human-readable artifact version,
+the task (`token_classification` or `sequence_classification`), and a map of
+relative filenames to SHA-256 hashes. Every regular file, including tokenizer,
+config, weights, labels, and demo metadata, is included except the manifest
+itself. Missing, changed, or additional files cause API startup to fail before
+either model loads. Symlinks are unsupported. Keep packages immutable while
+the API starts and runs; verification is performed at startup, not continuously.
+
+`src/artifact_metadata.py` streams file contents in 1 MiB chunks to calculate
+hashes. It checks the schema, task, complete file set, and fingerprints.
+The API snapshots verified metadata on startup; `/model-info` reports
+`ner_version`, `severity_version`, `ner_manifest_sha256`, and
+`severity_manifest_sha256` alongside the existing paths/artifact types.
+The manifest identity is SHA-256 of canonical JSON (sorted keys, compact
+separators), so formatting-only edits to the manifest do not change identity.
+Version/task/file-hash changes do. Individual file hashes always cover exact bytes.
+
+To package an existing NEW artifact directory from the project root:
+
+```powershell
+python -m scripts.create_artifact_manifests path/to/new-ner --version ner-v2 --task token_classification
+python -m scripts.create_artifact_manifests path/to/new-severity --version severity-v2 --task sequence_classification
+```
+
+The command only adds a manifest; it does not regenerate weights and refuses
+to overwrite an existing manifest. Use a new directory and new version when
+releasing changed artifacts. The version is a release convention, not enforced
+by a central registry. Inspect and validate the source model before packaging;
+do not regenerate a manifest just to bypass an unexplained integrity failure.
+Custom paths configured through `ADEGUARD_NER_MODEL_PATH` and
+`ADEGUARD_SEVERITY_MODEL_PATH` require manifests too.
+
+`scripts/create_tiny_demo_artifacts.py` remains an explicit destructive demo
+generator: it deletes/replaces its output directories with fresh random models.
+If deliberately used, package both resulting directories afterward with new
+versions using the commands above. It is unnecessary for adding versions to
+the current weights. No weights were regenerated in this versioning change.
+
+`.gitattributes` disables Git text conversion inside the two checked-in model
+folders, preserving fingerprints on Windows/Linux. Existing text files were
+normalized to their repository LF bytes before manifest creation. Other model
+locations need equivalent byte-preserving storage/checkout behavior.
+
+Verify the running API with:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/model-info | ConvertTo-Json
+```
+
+`tests/test_artifact_metadata.py` checks corruption, missing/extra files,
+invalid manifests, task mismatch, packaging preservation, startup rejection,
+and metadata snapshots using temporary directories. The Compose HTTP smoke
+script checks loaded version/fingerprint fields as well as prediction behavior.
+Hashes detect accidental changes relative to a manifest. They do not establish
+authenticity if someone replaces both files and manifest, nor record training
+data, training code, metrics, or approval history. This is local artifact
+identity/integrity, not a model registry or complete training provenance.
+
 ## Next Steps
 
 Frontend browser interaction tests and model evaluation are separate future
@@ -1032,7 +1096,7 @@ checks. Cloud deployment remains out of scope until explicitly approved.
 Later production-readiness work:
 
 - replace demo artifacts with real validated model artifacts
-- add model versioning and artifact provenance
+- extend artifact identity with training provenance and registry management
 - centralize application logs separately from collected Prometheus metrics
 - define operational alerts and validate failure notification behavior
 - add security review for public deployment

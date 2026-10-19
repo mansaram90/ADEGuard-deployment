@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-import json
-from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,11 +14,13 @@ try:
     from .config import C_MODEL_PATH, model_path
     from .request_logging import RequestLoggingMiddleware
     from .metrics import RequestMetrics, RequestMetricsMiddleware
+    from .artifact_metadata import verify_artifact
 except ImportError:
     from adeguard_inference import InputValidationError, NERModel, SeverityModel
     from config import C_MODEL_PATH, model_path
     from request_logging import RequestLoggingMiddleware
     from metrics import RequestMetrics, RequestMetricsMiddleware
+    from artifact_metadata import verify_artifact
 
 
 class PredictRequest(BaseModel):
@@ -57,26 +57,32 @@ class ModelInfoResponse(BaseModel):
     severity_model_path: str
     ner_artifact_type: str | None = None
     severity_artifact_type: str | None = None
-
-
-def read_artifact_type(path: str) -> str | None:
-    metadata_path = Path(path) / "ADEGUARD_DEMO_ARTIFACT.json"
-    if not metadata_path.exists():
-        return None
-
-    try:
-        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return None
-
-    return metadata.get("artifact_type")
+    ner_version: str
+    severity_version: str
+    ner_manifest_sha256: str
+    severity_manifest_sha256: str
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.ner_model = NERModel.load(model_path)
-    app.state.severity_model = SeverityModel.load(C_MODEL_PATH)
-    yield
+    ner_info = verify_artifact(model_path, expected_task="token_classification")
+    severity_info = verify_artifact(C_MODEL_PATH, expected_task="sequence_classification")
+    ner_model = NERModel.load(model_path)
+    severity_model = SeverityModel.load(C_MODEL_PATH)
+    # Publish readiness only after both packages verify and both models load.
+    app.state.ner_model = ner_model
+    app.state.severity_model = severity_model
+    app.state.model_info = ModelInfoResponse(
+        ner_model_path=str(model_path), severity_model_path=str(C_MODEL_PATH),
+        ner_artifact_type=ner_info["artifact_type"], severity_artifact_type=severity_info["artifact_type"],
+        ner_version=ner_info["version"], severity_version=severity_info["version"],
+        ner_manifest_sha256=ner_info["manifest_sha256"],
+        severity_manifest_sha256=severity_info["manifest_sha256"],
+    )
+    try:
+        yield
+    finally:
+        del app.state.ner_model, app.state.severity_model, app.state.model_info
 
 
 app = FastAPI(
@@ -117,13 +123,10 @@ def ready(request: Request) -> ReadyResponse:
 
 
 @app.get("/model-info", response_model=ModelInfoResponse)
-def model_info() -> ModelInfoResponse:
-    return ModelInfoResponse(
-        ner_model_path=str(model_path),
-        severity_model_path=str(C_MODEL_PATH),
-        ner_artifact_type=read_artifact_type(model_path),
-        severity_artifact_type=read_artifact_type(C_MODEL_PATH),
-    )
+def model_info(request: Request) -> ModelInfoResponse:
+    if not hasattr(request.app.state, "model_info"):
+        raise HTTPException(status_code=503, detail="Models are not loaded")
+    return request.app.state.model_info
 
 
 @app.post("/predict", response_model=PredictResponse)

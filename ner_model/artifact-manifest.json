@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "version": "demo-ner-v1",
+  "task": "token_classification",
+  "files": {
+    "ADEGUARD_DEMO_ARTIFACT.json": "b0a23df3952921245fb26f5ed2ae1bb32aff3e15504a0d0e43129731b50e919a",
+    "config.json": "6323bc983ed39fcb1e4f9af654b957dd757f365de6cfa4bfcfb4d27bf46f9c42",
+    "label.txt": "bbdb83b3e74b756717e63e60584bb04b5047cc8f76c80dfa7c8b26e21fc06580",
+    "model.safetensors": "f0989743a8b00a0ed7b13e12f796e74466e0d5f5df7c6d46aaccb5011992ed88",
+    "tokenizer.json": "1de407b2e0582631f39342925a3abe25d3dbad04d8caa2ff286cf097f5180653",
+    "tokenizer_config.json": "f3b923d63d9d8f22eb928febb2e8d6b0d29dd581c3fc113d2651f6306b4260df"
+  }
+}
