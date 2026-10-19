@@ -1,0 +1,12 @@
+{"id":"severity-eval-001","text":"Mild arm soreness following the vaccine resolved by the next morning.","label":"Mild","synthetic":true}
+{"id":"severity-eval-002","text":"The recipient noticed slight redness at the injection site and continued normal activities.","label":"Mild","synthetic":true}
+{"id":"severity-eval-003","text":"A brief mild headache after vaccination improved with rest at home.","label":"Mild","synthetic":true}
+{"id":"severity-eval-004","text":"Minor injection site itching lasted a few hours without other symptoms.","label":"Mild","synthetic":true}
+{"id":"severity-eval-005","text":"Persistent fever and nausea after the booster required an outpatient assessment.","label":"Moderate","synthetic":true}
+{"id":"severity-eval-006","text":"Following vaccination, fatigue and muscle pain prevented usual activities for two days.","label":"Moderate","synthetic":true}
+{"id":"severity-eval-007","text":"A spreading rash after the dose needed treatment at a local clinic without admission.","label":"Moderate","synthetic":true}
+{"id":"severity-eval-008","text":"Repeated vomiting after the vaccine led to a same day clinic visit and recovery at home.","label":"Moderate","synthetic":true}
+{"id":"severity-eval-009","text":"The recipient was hospitalized with severe breathing difficulty after vaccination.","label":"Severe","synthetic":true}
+{"id":"severity-eval-010","text":"A life threatening reaction following the dose required intensive care.","label":"Severe","synthetic":true}
+{"id":"severity-eval-011","text":"Collapse and chest pain after the booster required emergency hospital admission.","label":"Severe","synthetic":true}
+{"id":"severity-eval-012","text":"The report described death following a critical reaction after vaccination.","label":"Severe","synthetic":true}

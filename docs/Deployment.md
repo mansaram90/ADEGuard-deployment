@@ -1368,10 +1368,53 @@ additional passing-check record, not an automatic deletion or rollback policy.
 References: [Passing job outputs](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/pass-job-outputs)
 and [Storing workflow artifacts](https://docs.github.com/en/actions/tutorials/store-and-share-data).
 
+## Offline Severity Evaluation Baseline
+
+Serving checks validate availability and response structure. Offline evaluation
+compares predictions with assigned labels. The current first evaluation uses
+12 invented, separately maintained severity cases (four per class) in
+`evaluation/severity_demo.jsonl`. Their labels follow a simplified toy rubric,
+and the served weights remain random smoke-test artifacts. These scores teach
+the evaluation/reporting mechanics, not clinical performance or generalization.
+See [evaluation/README.md](../evaluation/README.md) for the fixture's scope,
+metric definitions, interpretation, and limitations.
+
+Run from the project root using the Python ML environment:
+
+```powershell
+python -m scripts.evaluate_severity
+```
+
+The evaluator verifies the severity artifact manifest, loads the same
+`SeverityModel` used by serving, and runs every fixture row without training
+or modifying weights. It writes a new timestamped JSON report under ignored
+`outputs/evaluation/` and prints its path, model version, accuracy and macro F1.
+No new third-party dependency is required beyond the existing inference stack.
+Optional `--dataset`, `--model` and `--output` arguments select other paths;
+the accepted dataset scope remains explicitly declared synthetic examples.
+
+The report contains dataset byte SHA-256, model version/manifest identity,
+runtime versions/device, per-class precision/recall/F1 and support, accuracy,
+macro F1, and an actual-row/predicted-column confusion matrix. Per-case IDs,
+expected/predicted labels and confidence support error inspection without
+copying input text into reports. A malformed/duplicate fixture row, model
+integrity failure or inference error stops the run; rows are never silently
+dropped. Existing output reports are not overwritten.
+
+Metric tests use a hand-computed imbalanced example, zero-denominator/absent
+class cases, malformed fixture cases, exact training-text overlap checks, and
+a real serving-model report. The backend CI suite discovers these tests through
+its existing `python -m pytest` command. There is no score threshold or model
+promotion decision yet. A successful evaluation exit means a valid report
+was produced, including when the measured scores are poor. A representative
+labeled benchmark and trained model are prerequisites for meaningful quality
+gates. Code/runtime and data-split provenance also matter when comparing runs.
+
 ## Next Steps
 
-Frontend browser interaction tests and model evaluation are separate future
-checks. Cloud deployment remains out of scope until explicitly approved.
+Frontend browser interaction tests and evaluation on representative real data
+are separate future checks. Cloud deployment remains out of scope until
+explicitly approved.
 
 Later production-readiness work:
 
