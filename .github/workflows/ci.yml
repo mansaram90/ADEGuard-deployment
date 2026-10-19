@@ -71,3 +71,52 @@ jobs:
         timeout-minutes: 2
         run: docker compose down --remove-orphans
 
+  monitoring-tests:
+    name: Monitoring rules and notification delivery
+    needs: backend-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      COMPOSE_PROJECT_NAME: adeguard-monitoring-ci
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python for HTTP checks
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate monitoring Compose configuration
+        run: docker compose --profile monitoring config --quiet
+
+      - name: Validate Prometheus configuration and rules
+        run: docker compose --profile monitoring run --rm --no-deps --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml
+
+      - name: Test alert timing and recovery with simulated samples
+        run: docker compose --profile monitoring run --rm --no-deps --volume ./monitoring/tests:/etc/prometheus/tests:ro --entrypoint promtool prometheus test rules /etc/prometheus/tests/alerts.test.yml
+
+      - name: Validate Alertmanager routing
+        run: docker compose --profile monitoring run --rm --no-deps --entrypoint amtool alertmanager check-config /etc/alertmanager/alertmanager.yml
+
+      - name: Build local notification receiver
+        run: docker compose --profile monitoring build notification-receiver
+
+      - name: Start local delivery services
+        run: docker compose --profile monitoring up -d --wait --wait-timeout 120 notification-receiver alertmanager
+
+      - name: Verify firing and recovery webhook delivery
+        run: python scripts/monitoring_smoke_test.py
+
+      - name: Show monitoring status and logs on failure
+        if: failure()
+        run: |
+          docker compose --profile monitoring ps --all
+          docker compose --profile monitoring logs --no-color --tail 100
+
+      - name: Clean up disposable monitoring services and data
+        if: always()
+        timeout-minutes: 2
+        run: docker compose --profile monitoring down --remove-orphans --volumes
+
