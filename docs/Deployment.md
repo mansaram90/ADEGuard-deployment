@@ -1088,6 +1088,85 @@ authenticity if someone replaces both files and manifest, nor record training
 data, training code, metrics, or approval history. This is local artifact
 identity/integrity, not a model registry or complete training provenance.
 
+## Publish Tested Docker Images to GitHub Container Registry
+
+The existing Docker build/smoke-test job now waits for both backend tests and
+monitoring validation. It builds the API and frontend once, starts them, and
+runs the HTTP smoke test. After success, only a `push` event on `main` runs
+registry login and publication. Pull requests, feature-branch pushes, and tag
+pushes do not log in or publish. The job's existing name stays unchanged.
+
+For this repository the images are:
+
+```text
+ghcr.io/mansaram90/adeguard-api:sha-<full-commit-sha>
+ghcr.io/mansaram90/adeguard-frontend:sha-<full-commit-sha>
+```
+
+The namespace comes from the lowercase `GITHUB_REPOSITORY_OWNER`; the suffixes
+are `adeguard-api` and `adeguard-frontend`. These names should be reserved for
+this project within the owner's namespace. A commit tag connects a build to
+its source revision. Tags can be overwritten, including by a rerun of the
+same commit; they are not immutable identifiers. Base images/dependencies
+remain capable of changing between builds. Use the recorded digest when you
+need exact image contents, and use the full commit rather than a short hash
+for tag identity.
+
+The publishing shell reads each smoke-tested container's `.Image` ID with
+`docker inspect`, tags that local image, and pushes it. It does not rebuild
+the image after testing. After each push it reads the matching repository's
+`RepoDigests` entry and appends a service/tag/digest table to the Actions run
+summary. Local image IDs and registry manifest digests identify different
+Docker objects; they should not be assumed to be equal.
+
+Workflow-wide token permissions are `contents: read`. Only the Docker job
+also requests `packages: write`. The login step receives the automatically
+provided `GITHUB_TOKEN` through an environment variable and pipes it to
+`docker login --password-stdin`; no personal access token is embedded in the
+repository. Registry credentials use a dedicated temporary `DOCKER_CONFIG`
+directory. An `always()` logout step and the existing `always()` Compose
+cleanup still run after publication failures. Publication is sequential:
+if API push succeeds and frontend push fails, the job fails but the API
+package can already exist. There is no atomic two-image release transaction.
+
+### Validate the first real publication
+
+After merging this workflow into `main`, open its **push** run, rather than
+the preceding pull-request run:
+
+1. Confirm Backend tests, monitoring validation, and Docker smoke checks pass.
+2. Confirm registry login and both image pushes pass.
+3. Open the run summary and copy both exact digest references.
+4. Check the repository/account Packages view for the two images and commit tags.
+5. Pull each digest reference to verify registry access and retrieval.
+
+For example, replacing the placeholders with actual summary values:
+
+```powershell
+docker pull ghcr.io/mansaram90/adeguard-api@sha256:<api-digest>
+docker pull ghcr.io/mansaram90/adeguard-frontend@sha256:<frontend-digest>
+```
+
+New packages are private by default. Public source code does not automatically
+make packages public. This workflow does not change package visibility. A
+private-package pull on your machine needs registry authentication with an
+account/token authorized to read the package; the Actions `GITHUB_TOKEN` is
+temporary and should not be copied to your machine. For an already-existing
+package, publication may require granting this repository Actions access in
+the package settings. Diagnose permission/access errors rather than placing
+personal credentials into the workflow.
+
+Publishing makes images available; it does not update your running Compose
+stack or deploy any cloud resources. Local Compose still uses its existing
+`build` configuration. The frontend still targets `http://127.0.0.1:8000`,
+and this step does not make the app suitable for arbitrary remote hosting.
+Synthetic model artifacts and local `steps.md` handling retain their existing
+scope. The Dockerfiles copy selected application/model/frontend files, so
+`steps.md` is not included in either published image.
+
+References: [Publishing Docker images](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images)
+and [Working with the Container registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
+
 ## Next Steps
 
 Frontend browser interaction tests and model evaluation are separate future
@@ -1100,6 +1179,6 @@ Later production-readiness work:
 - centralize application logs separately from collected Prometheus metrics
 - define operational alerts and validate failure notification behavior
 - add security review for public deployment
-- add image publishing to a registry
+- add retrieval and deployment of published images by digest
 - add cloud deployment only after explicit approval
 
