@@ -793,6 +793,111 @@ a digest pin. Grafana does not replace Prometheus storage or the separate
 JSON application logs. This step adds no alerts, model evaluation, or cloud
 deployment. Existing CI does not start the optional monitoring profile.
 
+## First Alert: Sustained API Scrape Failure
+
+`monitoring/rules/adeguard-alerts.yml` defines `ADEGuardAPIScrapeFailed`:
+
+```yaml
+expr: up{job="adeguard-api"} == 0
+for: 2m
+```
+
+The comparison selects configured API targets whose latest scrape failed.
+It does not prove every API operation is unavailable: a metrics-endpoint or
+network failure can also cause it. The `for` clause requires the condition to
+remain true across rule evaluations for two minutes before firing. Two minutes
+is a learning-environment choice, not a universal operational standard.
+
+Prometheus independently scrapes every 15 seconds and evaluates rules every
+15 seconds. An outage first needs a failed scrape and then an evaluation.
+The pending timer begins at that qualifying evaluation, not when you stop the
+container. Actual detection includes scrape, timeout, and evaluation timing.
+
+| Rule state | Meaning |
+| --- | --- |
+| Inactive | The expression currently selects no failing API target |
+| Pending | A failure is selected, but the two-minute continuous wait has not elapsed |
+| Firing | Failure remains selected at an evaluation at least two minutes after becoming pending |
+
+Recovery clears the alert at a subsequent successful scrape/evaluation; no
+extra `keep_firing_for` interval is configured. A brief recovery also resets
+the pending timer if another failure occurs later.
+
+`severity: warning` is a label for classification, not notification delivery.
+Annotations provide a summary and instance-specific troubleshooting message.
+The rule file is mounted read-only and loaded by `rule_files` in the collector
+configuration. No Alertmanager or notification receiver is configured, and no
+email, Slack message, or other external notification will be sent.
+
+### Validate before loading
+
+From the project root, run each command separately:
+
+```powershell
+docker compose --profile monitoring config --quiet
+docker compose --profile monitoring run --rm --no-deps --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml
+docker compose --profile monitoring run --rm --no-deps --volume ./monitoring/tests:/etc/prometheus/tests:ro --entrypoint promtool prometheus test rules /etc/prometheus/tests/alerts.test.yml
+```
+
+The first command checks Compose structure. The second validates Prometheus
+configuration and the referenced rule. The third uses simulated samples and
+time to test six scenarios without waiting minutes or stopping a live service:
+healthy, brief outage, sustained outage/recovery, reset of pending timer,
+missing series, and an unrelated job failing. These checks are not currently
+included in the existing application CI job.
+
+Start/update the normal monitoring stack:
+
+```powershell
+docker compose --profile monitoring up --build -d --wait --wait-timeout 240
+```
+
+The new rule mount causes collector recreation when applying this Compose
+change. For later content-only rule/config edits, restart Prometheus after
+validation because a mounted file change alone does not reload its rules:
+
+```powershell
+docker compose --profile monitoring restart prometheus
+```
+
+Open http://127.0.0.1:9090/alerts and locate `ADEGuardAPIScrapeFailed`.
+This is a Prometheus-managed rule, not a newly created Grafana-managed alert.
+
+### Controlled manual exercise
+
+Only do this when intentionally interrupting your local demo. It stops the
+API for that Compose project. Our automated live validation used a separate
+test project and alternate host ports to preserve your normal stack.
+
+```powershell
+docker compose stop api
+```
+
+Keep Prometheus running. Watch `up{job="adeguard-api"}` become 0 and the rule
+become pending, then firing after its two-minute wait. Restore the API:
+
+```powershell
+docker compose up -d --wait --wait-timeout 240 api
+```
+
+Wait for model startup, a successful scrape, and another evaluation. Confirm
+`up` is 1 and the alert is inactive. For pending/firing series, query:
+
+```promql
+ALERTS{alertname="ADEGuardAPIScrapeFailed"}
+```
+
+Those active series disappear when the alert is inactive. The rule remains
+listed in the rules interface/API; an empty active-alert list after recovery
+is expected. Restore the API even if the exercise fails or is interrupted.
+
+**Limits:** A missing/stale `up` series is not equal to 0. Removing the target
+from configuration does not trigger this particular rule. Stopping Prometheus
+itself also prevents it from evaluating or reporting alerts. This rule does
+not test `/predict` correctness, model quality, notification delivery, or
+monitoring-system availability. Additional rules and external monitoring are
+separate future work.
+
 ## Next Steps
 
 Frontend browser interaction tests and model evaluation are separate future

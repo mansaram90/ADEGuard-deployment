@@ -46,6 +46,12 @@ services:
         read_only: true
         bind:
           create_host_path: false
+      - type: bind
+        source: ./monitoring/rules
+        target: /etc/prometheus/rules
+        read_only: true
+        bind:
+          create_host_path: false
       - prometheus-data:/prometheus
     depends_on:
       api:

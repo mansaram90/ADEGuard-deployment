@@ -1,0 +1,11 @@
+groups:
+  - name: adeguard-availability
+    rules:
+      - alert: ADEGuardAPIScrapeFailed
+        expr: up{job="adeguard-api"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: ADEGuard API metrics scrape failed
+          description: "Prometheus has been unable to scrape {{ $labels.instance }} for at least 2 minutes. Check API logs and connectivity."
