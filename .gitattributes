@@ -1,3 +1,5 @@
 # Model manifests hash exact bytes. Disable text conversion across platforms.
 ner_model/** -text
 severity_model/** -text
+# Keep evaluation dataset byte identities stable across Windows/Linux checkout.
+evaluation/*.jsonl -text
