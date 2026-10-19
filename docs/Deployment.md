@@ -1167,6 +1167,136 @@ scope. The Dockerfiles copy selected application/model/frontend files, so
 References: [Publishing Docker images](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images)
 and [Working with the Container registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
 
+## Run a Local Release from Published Image Digests
+
+`compose.release.yaml` is a standalone API/frontend configuration. Run it with
+`-f compose.release.yaml` on its own; combining it with development Compose
+would merge in development settings. It has no `build` entries or source-code
+mounts. Its default project name is `adeguard-release`, which separates its
+resources from the development project. Both projects still use host ports
+8000/8080 by default, so only one can occupy those ports at a time.
+
+The release image names are assembled from the registry, namespace, and each
+required digest. Defaults are `ghcr.io` and `mansaram90`. Every reference
+includes `@sha256:`; there is no tag or `latest` fallback. `${VAR:?message}`
+rejects blank/missing digest values during Compose interpolation. Docker
+validates digest syntax and existence when retrieving the image. Optional
+`ADEGUARD_REGISTRY`/`ADEGUARD_NAMESPACE` overrides support other owners or a
+test registry. Shell environment variables take precedence over the env file;
+inspect resolved images before running a release.
+
+### Select and pull one tested image pair
+
+For initial setup, copy `.env.release.example` to `.env.release` if the local
+file does not already exist. Do not overwrite an existing release selection.
+Use the two digest references from the **same successful main push run**:
+
+```powershell
+if (-not (Test-Path -LiteralPath .env.release)) {
+    Copy-Item -LiteralPath .env.release.example -Destination .env.release
+}
+```
+
+Fill `ADEGUARD_API_DIGEST` and `ADEGUARD_FRONTEND_DIGEST` with only the 64 hex
+characters after `@sha256:`. They are different digests. Do not use the Git
+commit SHA, local Docker image ID, full registry reference, or literal
+placeholder text as either value. Local `.env.release` and saved
+`.env.release.*` selections are ignored by Git; the blank example is tracked.
+No registry credentials belong in these files.
+
+Then inspect and pull the selected images:
+
+```powershell
+docker compose --env-file .env.release -f compose.release.yaml config --images
+docker compose --env-file .env.release -f compose.release.yaml pull
+```
+
+Proceed only if both pulls succeed. Private packages require Docker registry
+authentication authorized to read them; see the preceding publishing section.
+At this stage pulling changes no running containers.
+
+### Start and validate
+
+Ensure ports 8000/8080 are available. If the development stack is using them,
+switch it off deliberately when ready (this stops its optional monitoring too,
+while retaining named volumes):
+
+```powershell
+docker compose --profile monitoring down
+```
+
+Start the release from the images just pulled:
+
+```powershell
+docker compose --env-file .env.release -f compose.release.yaml up -d --no-build --pull never --wait --wait-timeout 240
+docker compose --env-file .env.release -f compose.release.yaml ps
+python scripts/smoke_test.py
+Invoke-RestMethod http://127.0.0.1:8000/model-info | ConvertTo-Json
+```
+
+`--no-build` prevents compilation from local source. `--pull never` overrides
+the file's default `pull_policy: always` for this command because the preceding
+explicit pull has already retrieved the exact images; it also ensures startup
+uses those cached images. Without that override, a direct release `up` checks
+the registry. `--wait` waits for configured health checks and returns failure
+on readiness problems. The frontend depends on healthy API readiness, not just
+creation of its container.
+
+Open `http://127.0.0.1:8080` and submit an example after readiness succeeds.
+The existing static frontend targets `http://127.0.0.1:8000`, and the API allows
+the existing local frontend origins. Changing only published host ports does
+not reconfigure the JavaScript or CORS; this release path supports the current
+local layout. The HTTP smoke test verifies assets, readiness, model version
+fields, prediction, CORS, and metrics. Compare model-info values with the
+expected release as part of accepting the selected pair. This does not evaluate
+clinical model quality or automate browser interaction.
+
+### Update and manual rollback
+
+Before replacing the selected digests for an update, preserve the current
+known-good API/frontend pair together:
+
+```powershell
+Copy-Item -LiteralPath .env.release -Destination .env.release.previous
+```
+
+Update both values in `.env.release` from one successful newer run, inspect
+the resolved references, pull both, start with the commands above, and rerun
+validation. Saving the previous file is a local rollback aid, not a durable
+release history. Keep older accepted selections separately if needed.
+
+If validation fails, inspect logs and explicitly restore the saved pair:
+
+```powershell
+docker compose --env-file .env.release -f compose.release.yaml logs --no-color --tail 100
+Copy-Item -LiteralPath .env.release.previous -Destination .env.release
+docker compose --env-file .env.release -f compose.release.yaml config --images
+docker compose --env-file .env.release -f compose.release.yaml pull
+docker compose --env-file .env.release -f compose.release.yaml up -d --no-build --pull never --wait --wait-timeout 240
+python scripts/smoke_test.py
+```
+
+Compose does not automatically roll back a failed update. Service recreation
+can interrupt requests or temporarily leave mixed service versions. This is
+a manual local release/rollback workflow, not a zero-downtime deployment.
+Previous artifacts must remain available in the registry, or be cached locally
+for a deliberately offline recovery. There are no application data migrations
+in this two-service stack; image rollback alone would not reverse future
+database/schema changes.
+
+Stop this release with its explicit file/project selection:
+
+```powershell
+docker compose --env-file .env.release -f compose.release.yaml down
+```
+
+Monitoring remains available through the existing development Compose setup;
+this standalone release file includes only API and frontend. Cloud deployment
+and monitoring integration for release services are separate future work.
+
+References: [Compose interpolation and env-file precedence](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/)
+and [Compose service image, health and pull settings](https://docs.docker.com/reference/compose-file/services/).
+
 ## Next Steps
 
 Frontend browser interaction tests and model evaluation are separate future
@@ -1179,6 +1309,6 @@ Later production-readiness work:
 - centralize application logs separately from collected Prometheus metrics
 - define operational alerts and validate failure notification behavior
 - add security review for public deployment
-- add retrieval and deployment of published images by digest
+- automate release verification and retain an accepted release history
 - add cloud deployment only after explicit approval
 
