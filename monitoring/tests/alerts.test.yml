@@ -1,0 +1,105 @@
+# Run with promtool inside the Compose Prometheus image; paths refer to mounts.
+rule_files:
+  - /etc/prometheus/rules/adeguard-alerts.yml
+evaluation_interval: 15s
+
+tests:
+  - name: healthy target never fires
+    interval: 15s
+    input_series:
+      - series: 'up{job="adeguard-api",instance="api:8000"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: ADEGuardAPIScrapeFailed
+        exp_alerts: []
+
+  - name: brief failure recovers without firing
+    interval: 15s
+    input_series:
+      - series: 'up{job="adeguard-api",instance="api:8000"}'
+        values: '1 0x3 1x16'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: ADEGuardAPIScrapeFailed
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: ADEGuardAPIScrapeFailed
+        exp_alerts: []
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="ADEGuardAPIScrapeFailed",alertstate="pending"}'
+        eval_time: 45s
+        exp_samples:
+          - labels: 'ALERTS{alertname="ADEGuardAPIScrapeFailed",alertstate="pending",instance="api:8000",job="adeguard-api",severity="warning"}'
+            value: 1
+      - expr: 'ALERTS{alertname="ADEGuardAPIScrapeFailed"}'
+        eval_time: 75s
+        exp_samples: []
+
+  - name: sustained failure fires at threshold and resolves on recovery
+    interval: 15s
+    input_series:
+      - series: 'up{job="adeguard-api",instance="api:8000"}'
+        # First failure at 15s; two minutes later is 2m15s. Recovery at 3m30s.
+        values: '1 0x12 1x3'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: ADEGuardAPIScrapeFailed
+        exp_alerts: []
+      - eval_time: 2m15s
+        alertname: ADEGuardAPIScrapeFailed
+        exp_alerts:
+          - exp_labels:
+              instance: api:8000
+              job: adeguard-api
+              severity: warning
+            exp_annotations:
+              summary: ADEGuard API metrics scrape failed
+              description: "Prometheus has been unable to scrape api:8000 for at least 2 minutes. Check API logs and connectivity."
+      - eval_time: 3m30s
+        alertname: ADEGuardAPIScrapeFailed
+        exp_alerts: []
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="ADEGuardAPIScrapeFailed",alertstate="pending"}'
+        eval_time: 2m
+        exp_samples:
+          - labels: 'ALERTS{alertname="ADEGuardAPIScrapeFailed",alertstate="pending",instance="api:8000",job="adeguard-api",severity="warning"}'
+            value: 1
+
+  - name: recovery resets the pending timer
+    interval: 15s
+    input_series:
+      - series: 'up{job="adeguard-api",instance="api:8000"}'
+        # Up again at 75s; second failure starts at 90s, not at the first failure.
+        values: '1 0x3 1 0x9'
+    alert_rule_test:
+      - eval_time: 2m45s
+        alertname: ADEGuardAPIScrapeFailed
+        exp_alerts: []
+      - eval_time: 3m30s
+        alertname: ADEGuardAPIScrapeFailed
+        exp_alerts:
+          - exp_labels:
+              instance: api:8000
+              job: adeguard-api
+              severity: warning
+            exp_annotations:
+              summary: ADEGuard API metrics scrape failed
+              description: "Prometheus has been unable to scrape api:8000 for at least 2 minutes. Check API logs and connectivity."
+
+  - name: missing series is not equivalent to failed scrape
+    input_series: []
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: ADEGuardAPIScrapeFailed
+        exp_alerts: []
+
+  - name: another job does not trigger the API alert
+    interval: 15s
+    input_series:
+      - series: 'up{job="another-job",instance="other:8000"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: ADEGuardAPIScrapeFailed
+        exp_alerts: []
