@@ -9,3 +9,8 @@ logs/
 
 .streamlit/secrets.toml
 
+# Local release selections, including saved previous-release pairs.
+.env.release
+.env.release.*
+!.env.release.example
+

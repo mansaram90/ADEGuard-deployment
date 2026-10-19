@@ -1,0 +1,33 @@
+# Run alone with -f compose.release.yaml; do not merge with development Compose.
+name: adeguard-release
+
+services:
+  api:
+    image: "${ADEGUARD_REGISTRY:-ghcr.io}/${ADEGUARD_NAMESPACE:-mansaram90}/adeguard-api@sha256:${ADEGUARD_API_DIGEST:?Set ADEGUARD_API_DIGEST to the 64 hex characters from the API digest}"
+    pull_policy: always
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import json, urllib.request; response = urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3); assert json.load(response)['ready'] is True"
+      interval: 5s
+      timeout: 5s
+      start_period: 90s
+      retries: 12
+
+  frontend:
+    image: "${ADEGUARD_REGISTRY:-ghcr.io}/${ADEGUARD_NAMESPACE:-mansaram90}/adeguard-frontend@sha256:${ADEGUARD_FRONTEND_DIGEST:?Set ADEGUARD_FRONTEND_DIGEST to the 64 hex characters from the frontend digest}"
+    pull_policy: always
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
