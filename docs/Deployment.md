@@ -681,8 +681,117 @@ does not avoid host-port conflicts. Existing application smoke tests do not
 verify collector targets, historical queries, or persistence; these are
 separate monitoring validation checks in this phase.
 
-This is local monitoring with no authentication, Grafana, alert rules, or
-Alertmanager. Port 9090 is bound to loopback. No cloud resources are deployed.
+Prometheus has no authentication in this local setup. Port 9090 is bound to
+loopback. The following Grafana service adds visualization; alert rules,
+Alertmanager, and cloud resources are not included.
+
+## Provisioned Local Grafana Dashboard
+
+The `monitoring` profile also includes Grafana on http://127.0.0.1:3000.
+Start or update your existing stack from the project root:
+
+```powershell
+docker compose --profile monitoring up --build -d --wait --wait-timeout 240
+```
+
+This command adds Grafana to a stack already running under the same Compose
+project name. API/frontend/Prometheus retain their existing ports; Grafana
+publishes port 3000 on loopback. Default application startup still includes
+only API and frontend unless the monitoring profile is enabled.
+
+On a fresh Grafana data volume, sign in with username `admin` and password
+`admin`, then follow Grafana's password-change prompt. Keep your chosen password
+out of tracked files. The named `grafana-data` volume retains the account and
+password across recreation; initial defaults do not reset an existing account.
+Anonymous access and sign-up are disabled. This local setup is not a complete
+public-hosting access/security design.
+
+Open **Dashboards -> ADEGuard -> ADEGuard API Overview**, or:
+
+```text
+http://127.0.0.1:3000/d/adeguard-api-overview
+```
+
+### Provisioning: dashboards and data sources as files
+
+The files below are read-only mounts and the source of truth:
+
+| File | Role |
+| --- | --- |
+| `monitoring/grafana/provisioning/datasources/prometheus.yml` | Register the built-in Prometheus data source with stable UID `adeguard-prometheus` |
+| `monitoring/grafana/provisioning/dashboards/adeguard.yml` | Load dashboard files into the ADEGuard folder |
+| `monitoring/grafana/dashboards/adeguard-api.json` | Define seven panels, PromQL queries, units, layout, default time range, and refresh |
+
+Grafana queries `http://prometheus:9090` through the internal Compose network.
+Its built-in Prometheus plugin is used; no extra API/JSON plugin is required.
+Prometheus collects timestamped FastAPI samples; Grafana queries that stored
+history. A direct fetch of FastAPI's `/metrics` snapshot would not provide
+history needed for rate and histogram-window calculations.
+
+The provisioned dashboard refreshes every 15 seconds and initially shows the
+last 30 minutes. UI edits cannot be saved over it. Change the JSON definition
+and let file provisioning reload it, or recreate Grafana after changing its
+provisioned data source. Stable UIDs link panels to the source reproducibly.
+
+### Panels and interpretation
+
+| Panel | Meaning |
+| --- | --- |
+| API scrape status | UP/1 or DOWN/0 from Prometheus's latest API scrape; not model accuracy |
+| Successful predictions | Current sampled cumulative POST `/predict` status-200 counter; resets on API restart |
+| Rejected predictions | Current sampled cumulative prediction 4xx counter, including invalid input |
+| Prediction request rate | Requests per second across prediction statuses over a five-minute window |
+| Prediction server-error rate | Prediction 5xx responses per second over five minutes |
+| Average prediction request duration | Windowed duration sum divided by observation count; all prediction statuses |
+| Approximate p95 prediction duration | Bucket-based estimate of the 95th percentile across prediction statuses |
+
+The two counter cards are instant/current values, not totals restricted to the
+selected dashboard time range. Rate/duration charts use five-minute windows
+at each plotted time. Sparse traffic, fewer than two scrapes, absent error
+series, or no recent observations can give empty panels/NaN. Missing data is
+not automatically replaced by zero. A UP status does not guarantee every
+other series exists. Low-volume demo timing is not a performance benchmark.
+
+Generate fictional requests in the browser at port 8080. To see a rejection,
+submit text exceeding the model's token capacity; the UI rejects blank text
+before sending it, so use the API if testing whitespace rejection. Wait for
+the 15-second scrape/refresh cycle and a few samples. A server-error panel can
+remain empty when no 5xx response has been observed; do not break the model
+service just to fill that panel.
+
+### Validation and operations
+
+```powershell
+docker compose --profile monitoring ps
+docker compose --profile monitoring logs --tail 100 grafana
+Invoke-RestMethod http://127.0.0.1:3000/api/health
+```
+
+Health checks establish Grafana's own readiness. Connection health and actual
+dashboard queries must also succeed. The Grafana service waits for Prometheus
+readiness, but successful target scraping remains a separate condition.
+
+Temporary validation uses a distinct project and a temporary Compose override
+for API port 18000, Prometheus port 19090, and Grafana port 13000. Only those
+three services are started, without a frontend container. This tests Grafana
+without conflicting with an existing learning stack on the normal ports.
+Compose's `!override` port replacement requires a compatible recent Compose
+version; the installed Compose supports it. The override is a test artifact,
+not a tracked application configuration.
+
+Normal shutdown preserves both monitoring volumes:
+
+```powershell
+docker compose --profile monitoring down --remove-orphans
+```
+
+`down --volumes` intentionally deletes both Prometheus history and Grafana
+account/database state for that project. Avoid it for learning data you want
+to retain. Dashboard/data-source definitions remain in repository files even
+if volumes are discarded. The fixed Grafana image tag is `13.2.4`; it is not
+a digest pin. Grafana does not replace Prometheus storage or the separate
+JSON application logs. This step adds no alerts, model evaluation, or cloud
+deployment. Existing CI does not start the optional monitoring profile.
 
 ## Next Steps
 
@@ -694,7 +803,7 @@ Later production-readiness work:
 - replace demo artifacts with real validated model artifacts
 - add model versioning and artifact provenance
 - centralize application logs separately from collected Prometheus metrics
-- define operational dashboards and alerts
+- define operational alerts and validate failure notification behavior
 - add security review for public deployment
 - add image publishing to a registry
 - add cloud deployment only after explicit approval
