@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   backend-tests:
     name: Backend tests
@@ -33,9 +36,13 @@ jobs:
 
   docker-build:
     name: Docker build and smoke test
-    needs: backend-tests
+    # Keep tested images on this runner until every prerequisite has passed.
+    needs: [backend-tests, monitoring-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
     env:
       COMPOSE_PROJECT_NAME: adeguard-ci
 
@@ -59,6 +66,49 @@ jobs:
 
       - name: Check frontend and API prediction
         run: python scripts/smoke_test.py
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCKER_CONFIG: ${{ runner.temp }}/ghcr-docker-config
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Publish the tested API and frontend images
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          DOCKER_CONFIG: ${{ runner.temp }}/ghcr-docker-config
+        run: |
+          set -euo pipefail
+          namespace="${GITHUB_REPOSITORY_OWNER,,}"
+          {
+            echo '## Published container images'
+            echo
+            echo "Source commit: $GITHUB_SHA"
+            echo
+            echo '| Service | Commit tag | Exact digest reference |'
+            echo '| --- | --- | --- |'
+          } >> "$GITHUB_STEP_SUMMARY"
+          for service in api frontend; do
+            # Use the image ID of the container that passed the smoke test.
+            container_id="$(docker compose ps -q "$service")"
+            test -n "$container_id"
+            tested_image="$(docker inspect --format '{{.Image}}' "$container_id")"
+            image="ghcr.io/$namespace/adeguard-$service"
+            target="$image:sha-$GITHUB_SHA"
+            docker image tag "$tested_image" "$target"
+            docker image push "$target"
+            digest_ref="$(docker image inspect "$target" --format '{{json .RepoDigests}}' | python -c 'import json, sys; print(next(ref for ref in json.load(sys.stdin) if ref.startswith(sys.argv[1] + "@sha256:")))' "$image")"
+            printf '| %s | `%s` | `%s` |\n' "$service" "$target" "$digest_ref" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Log out of GitHub Container Registry
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          DOCKER_CONFIG: ${{ runner.temp }}/ghcr-docker-config
+        run: docker logout ghcr.io
 
       - name: Show container status and logs on failure
         if: failure()
