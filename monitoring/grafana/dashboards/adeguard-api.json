@@ -1,0 +1,405 @@
+{
+  "id": null,
+  "uid": "adeguard-api-overview",
+  "title": "ADEGuard API Overview",
+  "description": "Local deployment demo telemetry. Synthetic models; service measurements do not establish model quality. Empty panels may reflect missing observations.",
+  "tags": [
+    "adeguard",
+    "mlops",
+    "demo"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "refresh": "15s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "API scrape status",
+      "description": "1 = latest scrape succeeded; 0 = failed. This does not measure model quality.",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "adeguard-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 8,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "adeguard-prometheus"
+          },
+          "expr": "up{job=\"adeguard-api\"}",
+          "legendFormat": "API scrape status",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "No samples",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "UP",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 2,
+      "title": "Successful predictions (current counter)",
+      "description": "Sampled cumulative HTTP 200 prediction count. Resets on API process restart; not a selected-time-range total or accuracy score.",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "adeguard-prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 8,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "adeguard-prometheus"
+          },
+          "expr": "sum(adeguard_http_requests_total{job=\"adeguard-api\",method=\"POST\",path=\"/predict\",status_code=\"200\"})",
+          "legendFormat": "Successful predictions (current counter)",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No samples",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "title": "Rejected predictions (current counter)",
+      "description": "Sampled cumulative 4xx prediction count, including input validation. No samples before the first observed rejection. Resets on API restart.",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "adeguard-prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 8,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "adeguard-prometheus"
+          },
+          "expr": "sum(adeguard_http_requests_total{job=\"adeguard-api\",method=\"POST\",path=\"/predict\",status_code=~\"4..\"})",
+          "legendFormat": "Rejected predictions (current counter)",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No samples",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "title": "Prediction request rate",
+      "description": "All prediction statuses, requests per second over a five-minute window. Requires at least two scrapes.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "adeguard-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "adeguard-prometheus"
+          },
+          "expr": "sum(rate(adeguard_http_requests_total{job=\"adeguard-api\",method=\"POST\",path=\"/predict\"}[5m]))",
+          "legendFormat": "Prediction request rate",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "No samples",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Prediction server-error rate",
+      "description": "5xx responses per second over five minutes. Missing error series appears as no samples, not fabricated zero. Input rejections are 4xx, not server errors.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "adeguard-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 5,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "adeguard-prometheus"
+          },
+          "expr": "sum(rate(adeguard_http_requests_total{job=\"adeguard-api\",method=\"POST\",path=\"/predict\",status_code=~\"5..\"}[5m]))",
+          "legendFormat": "Prediction server-error rate",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "No samples",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Average prediction request duration",
+      "description": "Windowed mean across all prediction statuses. No recent observations can yield NaN. Includes request handling, not isolated inference or browser latency.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "adeguard-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "adeguard-prometheus"
+          },
+          "expr": "sum(rate(adeguard_http_request_duration_seconds_sum{job=\"adeguard-api\",method=\"POST\",path=\"/predict\"}[5m])) / sum(rate(adeguard_http_request_duration_seconds_count{job=\"adeguard-api\",method=\"POST\",path=\"/predict\"}[5m]))",
+          "legendFormat": "Average prediction request duration",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "No samples",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Approximate p95 prediction duration",
+      "description": "Approximate 95th percentile from histogram buckets across prediction statuses. Needs observations and multiple scrapes. Sparse demo traffic is not a performance benchmark.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "adeguard-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 13,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "adeguard-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(adeguard_http_request_duration_seconds_bucket{job=\"adeguard-api\",method=\"POST\",path=\"/predict\"}[5m])))",
+          "legendFormat": "Approximate p95 prediction duration",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "No samples",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      }
+    }
+  ],
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  }
+}

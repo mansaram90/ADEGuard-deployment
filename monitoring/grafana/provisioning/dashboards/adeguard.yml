@@ -1,0 +1,13 @@
+apiVersion: 1
+
+providers:
+  - name: ADEGuard
+    orgId: 1
+    folder: ADEGuard
+    folderUid: adeguard
+    type: file
+    disableDeletion: false
+    allowUiUpdates: false
+    updateIntervalSeconds: 10
+    options:
+      path: /etc/grafana/dashboards
