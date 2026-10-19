@@ -682,8 +682,8 @@ verify collector targets, historical queries, or persistence; these are
 separate monitoring validation checks in this phase.
 
 Prometheus has no authentication in this local setup. Port 9090 is bound to
-loopback. The following Grafana service adds visualization; alert rules,
-Alertmanager, and cloud resources are not included.
+loopback. Grafana visualization, alert rules, and local Alertmanager delivery
+are described below. No cloud resources are included.
 
 ## Provisioned Local Grafana Dashboard
 
@@ -771,10 +771,12 @@ Health checks establish Grafana's own readiness. Connection health and actual
 dashboard queries must also succeed. The Grafana service waits for Prometheus
 readiness, but successful target scraping remains a separate condition.
 
-Temporary validation uses a distinct project and a temporary Compose override
+The Grafana phase's temporary validation used a distinct project and a temporary Compose override
 for API port 18000, Prometheus port 19090, and Grafana port 13000. Only those
-three services are started, without a frontend container. This tests Grafana
+three services were started, without a frontend container. This tested Grafana
 without conflicting with an existing learning stack on the normal ports.
+Notification services added later are now dependencies of the collector and
+need their own isolated ports in future full monitoring-stack tests.
 Compose's `!override` port replacement requires a compatible recent Compose
 version; the installed Compose supports it. The override is a test artifact,
 not a tracked application configuration.
@@ -790,8 +792,10 @@ account/database state for that project. Avoid it for learning data you want
 to retain. Dashboard/data-source definitions remain in repository files even
 if volumes are discarded. The fixed Grafana image tag is `13.2.4`; it is not
 a digest pin. Grafana does not replace Prometheus storage or the separate
-JSON application logs. This step adds no alerts, model evaluation, or cloud
-deployment. Existing CI does not start the optional monitoring profile.
+JSON application logs. Dashboard provisioning adds no model evaluation or cloud
+deployment. Application CI omits optional monitoring; the separate monitoring
+job described below checks rules and local notification delivery, not Grafana
+queries or a full live outage.
 
 ## First Alert: Sustained API Scrape Failure
 
@@ -826,8 +830,8 @@ the pending timer if another failure occurs later.
 `severity: warning` is a label for classification, not notification delivery.
 Annotations provide a summary and instance-specific troubleshooting message.
 The rule file is mounted read-only and loaded by `rule_files` in the collector
-configuration. No Alertmanager or notification receiver is configured, and no
-email, Slack message, or other external notification will be sent.
+configuration. Alertmanager and the local observer below deliver test webhooks.
+No email, Slack message, or other human-facing external notification is configured.
 
 ### Validate before loading
 
@@ -843,8 +847,8 @@ The first command checks Compose structure. The second validates Prometheus
 configuration and the referenced rule. The third uses simulated samples and
 time to test six scenarios without waiting minutes or stopping a live service:
 healthy, brief outage, sustained outage/recovery, reset of pending timer,
-missing series, and an unrelated job failing. These checks are not currently
-included in the existing application CI job.
+missing series, and an unrelated job failing. These checks now run in the
+separate monitoring CI job.
 
 Start/update the normal monitoring stack:
 
@@ -897,6 +901,128 @@ itself also prevents it from evaluating or reporting alerts. This rule does
 not test `/predict` correctness, model quality, notification delivery, or
 monitoring-system availability. Additional rules and external monitoring are
 separate future work.
+
+## Local Notification Delivery with Alertmanager
+
+The `monitoring` profile now adds two services: Alertmanager and a local Python
+webhook observer. The complete path is:
+
+```text
+Prometheus rule -> Alertmanager routing/grouping -> HTTP webhook -> observer
+```
+
+Start/update the stack with the usual command:
+
+```powershell
+docker compose --profile monitoring up --build -d --wait --wait-timeout 240
+```
+
+Alertmanager's local UI is http://127.0.0.1:9093. The observer exposes local
+health/history endpoints at ports 9001. All published ports are loopback-bound.
+The observer uses Python's standard library and runs as a non-root container
+user; it does not install FastAPI, PyTorch, or any ML dependencies.
+
+`monitoring/prometheus.yml` points to `alertmanager:9093`. The collector waits
+for the API and Alertmanager to become healthy on startup. Alertmanager waits
+for the observer. Startup dependencies do not provide continuous recovery or
+guarantee future delivery.
+
+`monitoring/alertmanager.yml` routes alerts to
+`http://notification-receiver:9001/alerts`. Grouping uses alert name, job, and
+instance. A 15-second `group_wait` follows initial arrival; `group_interval`
+is 15 seconds and unchanged firing reminders use `repeat_interval: 1h`.
+`send_resolved: true` requests recovery notifications. First delivery follows
+Prometheus's two-minute rule wait plus notification/grouping scheduling; the
+alert being firing does not itself prove its webhook has arrived.
+
+The observer (`monitoring/notification_receiver.py`) accepts JSON POSTs at
+`/alerts` and records selected metadata: timestamp, generated notification ID,
+group status, individual alert status, alert name, job, and instance. It does
+not retain full annotations or arbitrary extra labels. Each JSON log line is
+one alert record; a webhook group can contain several alerts, including mixed
+individual states. Accepted groups are validated in full before recording.
+
+Requests are limited to 64 KiB and 50 alerts. Invalid JSON/shape, unsupported
+content type, missing content length, and oversized data receive error
+responses. Body reads have a timeout. `/notifications` returns the latest 100
+alert records in memory for testing. This history resets on receiver restart
+and can evict older entries. HTTP 200 acknowledges local observation, not
+durable storage, exactly-once delivery, or a person having read a notification.
+
+```powershell
+docker compose --profile monitoring logs --tail 100 notification-receiver
+(Invoke-RestMethod http://127.0.0.1:9001/notifications).notifications
+```
+
+Alertmanager retains silences/notification state in its project-scoped
+`alertmanager-data` volume; it does not make receiver history durable. Its
+single-instance gossip listener is disabled. These local endpoints have no
+authentication and are for learning, not public hosting. No email/Slack
+accounts or external webhook services are connected.
+
+### Fast notification test without stopping the API
+
+Only run the following against this local/test Alertmanager configuration:
+
+```powershell
+python scripts/monitoring_smoke_test.py
+```
+
+The script checks readiness, creates a uniquely labelled synthetic alert via
+Alertmanager's `/api/v2/alerts`, waits until the observer records firing, sends
+the same alert with an ended timestamp, and waits for resolved. It polls the
+observer rather than assuming HTTP acceptance proves webhook delivery. It
+uses only Python's standard library and returns nonzero on failure. Each phase
+has a finite timeout (60 seconds by default). It tries to resolve an injected
+alert on failure; test-stack cleanup remains necessary.
+
+This bypasses Prometheus rule timing intentionally. It verifies Alertmanager
+and webhook delivery, not the API outage detector. Local end-to-end testing
+separately stops an isolated test API, waits for the real two-minute rule,
+observes an actual `ADEGuardAPIScrapeFailed` notification, restarts the API,
+and verifies its recovery notification. The normal API is left running.
+
+Validate routing with:
+
+```powershell
+docker compose --profile monitoring run --rm --no-deps --entrypoint amtool alertmanager check-config /etc/alertmanager/alertmanager.yml
+```
+
+Use normal `down` to preserve monitoring data. For a disposable test project,
+`down --remove-orphans --volumes` also deletes that project's test storage.
+
+## Automated Monitoring CI Checks
+
+`.github/workflows/ci.yml` includes **Monitoring rules and notification delivery**
+after backend tests, alongside the existing Docker application test job. On a
+separate GitHub runner it:
+
+1. Parses Compose with the monitoring profile enabled.
+2. Uses `promtool` to validate collector config and rule references.
+3. Runs all six simulated-time rule scenarios.
+4. Uses `amtool` to validate Alertmanager routing.
+5. Builds the lightweight observer and starts only observer/Alertmanager.
+6. Runs `scripts/monitoring_smoke_test.py` for actual synthetic firing/resolved delivery.
+7. Emits diagnostics on failure and schedules cleanup with `if: always()`.
+
+No API image, Grafana, or full two-minute outage is needed for the fast delivery
+job. Configuration validation can create project volumes through one-off
+containers; cleanup removes those too. Each CI job has its own project and
+runner. Local test results do not prove the remote workflow has passed.
+
+To reproduce the delivery portion from the project root:
+
+```powershell
+docker compose --profile monitoring build notification-receiver
+docker compose --profile monitoring up -d --wait --wait-timeout 120 notification-receiver alertmanager
+python scripts/monitoring_smoke_test.py
+```
+
+This does not run the rule/config validators automatically; run the earlier
+`promtool` and `amtool` commands too. The existing backend suite includes the
+observer's real HTTP validation tests. Monitoring CI currently does not start
+Grafana or verify its panels, test webhook retries against a failed observer,
+test notification-state persistence, or prove delivery to an external person.
 
 ## Next Steps
 

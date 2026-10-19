@@ -56,11 +56,52 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      alertmanager:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:9090/-/ready"]
       interval: 5s
       timeout: 5s
       start_period: 15s
+      retries: 12
+
+  notification-receiver:
+    build:
+      context: ./monitoring
+      dockerfile: notification-receiver.Dockerfile
+    profiles: ["monitoring"]
+    ports:
+      - "127.0.0.1:9001:9001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9001/health', timeout=3).read()"]
+      interval: 5s
+      timeout: 5s
+      retries: 6
+
+  alertmanager:
+    image: prom/alertmanager:v0.34.1
+    profiles: ["monitoring"]
+    ports:
+      - "127.0.0.1:9093:9093"
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --cluster.listen-address=
+    volumes:
+      - type: bind
+        source: ./monitoring/alertmanager.yml
+        target: /etc/alertmanager/alertmanager.yml
+        read_only: true
+        bind:
+          create_host_path: false
+      - alertmanager-data:/alertmanager
+    depends_on:
+      notification-receiver:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:9093/-/ready"]
+      interval: 5s
+      timeout: 5s
       retries: 12
 
   grafana:
@@ -101,3 +142,4 @@ services:
 volumes:
   prometheus-data:
   grafana-data:
+  alertmanager-data:
