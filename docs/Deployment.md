@@ -1297,6 +1297,77 @@ and monitoring integration for release services are separate future work.
 References: [Compose interpolation and env-file precedence](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/)
 and [Compose service image, health and pull settings](https://docs.docker.com/reference/compose-file/services/).
 
+## Automatically Verify and Retain a Published Release Selection
+
+CI now includes a fourth job, **Verify published release**. It runs on a new
+Ubuntu runner only for pushes to `main`, after the Docker build/publish job
+succeeds. Pull-request, feature-branch, and tag runs skip it because those runs
+do not publish images. The three existing check names remain unchanged.
+
+The publisher writes `api_digest`, `frontend_digest`, and `namespace` to
+`GITHUB_OUTPUT`; its job outputs expose these values to the dependent job.
+The release job uses them as Compose interpolation variables. It does not look
+up a mutable tag again or copy images from the build runner, so verification
+exercises registry retrieval of the exact pair that was just published.
+
+Before any pull, the job requires two lowercase 64-character hex digests and a
+nonempty namespace, then validates `compose.release.yaml`. It uses a separate
+`adeguard-release-ci` project, authenticates with `packages: read`, pulls both
+images, starts with `--no-build --pull never --wait`, and runs the existing
+HTTP smoke script. Each GitHub job has its own runner, so default ports 8000/8080
+are available without sharing the development job's containers or image cache.
+Registry login, pull, and logout share a dedicated temporary Docker config.
+
+Only after the HTTP verification succeeds, the job writes
+`verified-release.env` containing:
+
+```text
+# Verified source commit: <commit>
+# Workflow run: <run URL and attempt>
+ADEGUARD_REGISTRY=ghcr.io
+ADEGUARD_NAMESPACE=mansaram90
+ADEGUARD_API_DIGEST=<64-hex-api-digest>
+ADEGUARD_FRONTEND_DIGEST=<64-hex-frontend-digest>
+```
+
+There are no authentication tokens or application request bodies in this file.
+`actions/upload-artifact` retains it under
+`verified-release-<full-commit-sha>-<attempt>`, requesting 30 days of retention
+subject to repository/organization policies. A missing file is an upload error.
+The filename is not hidden, so the action's hidden-file exclusion does not drop
+it. Artifact creation/upload use normal success conditions, not `always()`.
+Failure diagnostics, Compose cleanup, and registry logout still run after
+failures. A failed check therefore does not upload a new verified selection.
+Cleanup or upload itself can still fail; check the whole job outcome before
+accepting a release.
+
+### Inspect and use the verified selection
+
+After merging this workflow change, inspect the `main` push run:
+
+1. Confirm **Verify published release** passes, including actual GHCR login/pull.
+2. Confirm the run summary shows the two verified digest references.
+3. Download the `verified-release-...` artifact from that run's Artifacts area.
+4. Extract `verified-release.env` and inspect its commit/run comments and pair.
+5. Preserve your current `.env.release` as `.env.release.previous`, then copy
+   the downloaded file to `.env.release` if you choose to run that release.
+6. Follow the earlier release selection/pull/start/smoke commands.
+
+The selection file is small release metadata, not a bundle of container images.
+It makes a previously verified pair retrievable for deployment or manual
+rollback while the images remain available. Artifact retention and registry
+image retention are separate. Download and retain accepted selections beyond
+the configured retention window if you need a longer history.
+
+This job verifies the local-container serving path from registry contents.
+It does not deploy to a cloud host, test zero-downtime updates, perform model
+evaluation, or certify browser interaction. Images already published remain
+in GHCR if release verification later fails; the verified artifact is the
+additional passing-check record, not an automatic deletion or rollback policy.
+
+References: [Passing job outputs](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/pass-job-outputs)
+and [Storing workflow artifacts](https://docs.github.com/en/actions/tutorials/store-and-share-data).
+
 ## Next Steps
 
 Frontend browser interaction tests and model evaluation are separate future
@@ -1309,6 +1380,6 @@ Later production-readiness work:
 - centralize application logs separately from collected Prometheus metrics
 - define operational alerts and validate failure notification behavior
 - add security review for public deployment
-- automate release verification and retain an accepted release history
+- retain accepted release selections beyond CI artifact expiration
 - add cloud deployment only after explicit approval
 
