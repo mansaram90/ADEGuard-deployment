@@ -43,6 +43,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      api_digest: ${{ steps.publish.outputs.api_digest }}
+      frontend_digest: ${{ steps.publish.outputs.frontend_digest }}
+      namespace: ${{ steps.publish.outputs.namespace }}
     env:
       COMPOSE_PROJECT_NAME: adeguard-ci
 
@@ -76,6 +80,7 @@ jobs:
         run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
 
       - name: Publish the tested API and frontend images
+        id: publish
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: bash
         env:
@@ -101,8 +106,12 @@ jobs:
             docker image tag "$tested_image" "$target"
             docker image push "$target"
             digest_ref="$(docker image inspect "$target" --format '{{json .RepoDigests}}' | python -c 'import json, sys; print(next(ref for ref in json.load(sys.stdin) if ref.startswith(sys.argv[1] + "@sha256:")))' "$image")"
+            # Backticks are literal Markdown formatting, not shell substitutions.
+            # shellcheck disable=SC2016
             printf '| %s | `%s` | `%s` |\n' "$service" "$target" "$digest_ref" >> "$GITHUB_STEP_SUMMARY"
+            printf '%s_digest=%s\n' "$service" "${digest_ref##*@sha256:}" >> "$GITHUB_OUTPUT"
           done
+          printf 'namespace=%s\n' "$namespace" >> "$GITHUB_OUTPUT"
 
       - name: Log out of GitHub Container Registry
         if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -169,4 +178,105 @@ jobs:
         if: always()
         timeout-minutes: 2
         run: docker compose --profile monitoring down --remove-orphans --volumes
+
+  release-verification:
+    name: Verify published release
+    needs: docker-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    env:
+      COMPOSE_FILE: compose.release.yaml
+      COMPOSE_PROJECT_NAME: adeguard-release-ci
+      ADEGUARD_REGISTRY: ghcr.io
+      ADEGUARD_NAMESPACE: ${{ needs.docker-build.outputs.namespace }}
+      ADEGUARD_API_DIGEST: ${{ needs.docker-build.outputs.api_digest }}
+      ADEGUARD_FRONTEND_DIGEST: ${{ needs.docker-build.outputs.frontend_digest }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python for HTTP checks
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate published digest selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$ADEGUARD_API_DIGEST" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$ADEGUARD_FRONTEND_DIGEST" =~ ^[0-9a-f]{64}$ ]]
+          test -n "$ADEGUARD_NAMESPACE"
+          docker compose config --quiet
+          docker compose config --images
+
+      - name: Log in for published image pulls
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCKER_CONFIG: ${{ runner.temp }}/ghcr-release-config
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Pull the published images by digest
+        env:
+          DOCKER_CONFIG: ${{ runner.temp }}/ghcr-release-config
+        run: docker compose pull
+
+      - name: Start release without building
+        run: docker compose up -d --no-build --pull never --wait --wait-timeout 240
+
+      - name: Verify the running published release
+        run: python scripts/smoke_test.py
+
+      - name: Record the verified release selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            printf '# Verified source commit: %s\n' "$GITHUB_SHA"
+            printf '# Workflow run: %s/%s/actions/runs/%s (attempt %s)\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+            printf 'ADEGUARD_REGISTRY=%s\n' "$ADEGUARD_REGISTRY"
+            printf 'ADEGUARD_NAMESPACE=%s\n' "$ADEGUARD_NAMESPACE"
+            printf 'ADEGUARD_API_DIGEST=%s\n' "$ADEGUARD_API_DIGEST"
+            printf 'ADEGUARD_FRONTEND_DIGEST=%s\n' "$ADEGUARD_FRONTEND_DIGEST"
+          } > "$RUNNER_TEMP/verified-release.env"
+          {
+            echo '## Verified published release'
+            echo
+            echo "Source commit: $GITHUB_SHA"
+            echo
+            echo "API: $ADEGUARD_REGISTRY/$ADEGUARD_NAMESPACE/adeguard-api@sha256:$ADEGUARD_API_DIGEST"
+            echo
+            echo "Frontend: $ADEGUARD_REGISTRY/$ADEGUARD_NAMESPACE/adeguard-frontend@sha256:$ADEGUARD_FRONTEND_DIGEST"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save verified release selection
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-release-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/verified-release.env
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Show release status and logs on failure
+        if: failure()
+        run: |
+          docker compose ps --all
+          docker compose logs --no-color --tail 100
+
+      - name: Clean up release services
+        if: always()
+        timeout-minutes: 2
+        run: docker compose down --remove-orphans
+
+      - name: Log out of the release registry session
+        if: always()
+        env:
+          DOCKER_CONFIG: ${{ runner.temp }}/ghcr-release-config
+        run: docker logout ghcr.io
 
