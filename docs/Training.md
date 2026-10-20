@@ -234,3 +234,92 @@ output protection and a successful fresh-process CLI run that loads neither
 torch nor transformers and preserves all supplied input hashes. Existing
 pytest CI discovers these tests without workflow changes. Actual records and
 local `steps.md` remain outside the commit.
+
+## Rehearse activation and rollback in an isolated preview
+
+After recording HOLD, a separate operational exercise can demonstrate loading
+and restoring exact packages. This is permission to test the synthetic candidate
+in a disposable local preview, not permission to promote it. The quality HOLD
+remains in force. No further fitting, checkpoint selection or benchmark scoring
+is performed.
+
+`compose.model-preview.yaml` runs only an API on `127.0.0.1:18000`, using a
+digest-pinned published API image. A read-only bind mount selects the severity
+package at `/models/severity`; `ADEGUARD_SEVERITY_MODEL_PATH` tells the existing
+startup loader to use it. NER remains inside the image. `create_host_path: false`
+rejects missing host directories. Explicit `pull_policy: never` and `--no-build`
+keep the image fixed during the drill; pull that exact image first if absent.
+The separate project name avoids recreating the normal API/frontend stack.
+Run this file alone, without combining it with development/release Compose.
+
+From the repository root, create two local selections (use the actual immutable
+candidate path from your own training run if it differs):
+
+```powershell
+New-Item -ItemType Directory -Force outputs/model-preview | Out-Null
+$previewDigest = '39552a3ef0fa6abaf7b3cb4f65101fa6f5d9e9ac475b446848f2157aac7ac134'
+$previewParent = (Resolve-Path severity_model).Path.Replace('\', '/')
+$previewCandidate = (Resolve-Path outputs/candidates/20261020T100542022874Z/model).Path.Replace('\', '/')
+@("ADEGUARD_PREVIEW_API_DIGEST=$previewDigest", "ADEGUARD_PREVIEW_MODEL_DIR=$previewParent") | Set-Content outputs/model-preview/parent.env -Encoding ascii
+@("ADEGUARD_PREVIEW_API_DIGEST=$previewDigest", "ADEGUARD_PREVIEW_MODEL_DIR=$previewCandidate") | Set-Content outputs/model-preview/candidate.env -Encoding ascii
+docker compose --env-file outputs/model-preview/parent.env -f compose.model-preview.yaml config --quiet
+# Download the fixed image if it is not already cached:
+docker compose --env-file outputs/model-preview/parent.env -f compose.model-preview.yaml pull
+```
+
+The recorded digest is the previously tested API image published for commit
+`34e157130d4ba851f257019e859ac8de2ad780f0`; it is not a claim about the latest
+image. This drill changes model selection independently of the serving code.
+Keep packages immutable throughout. The example setup overwrites the two local
+preview env selections, so inspect existing selections before recreating them.
+
+Run each verification only after its preceding Compose command succeeds:
+
+```powershell
+# 1. Establish the parent baseline.
+docker compose --env-file outputs/model-preview/parent.env -f compose.model-preview.yaml up -d --no-build --pull never --wait --wait-timeout 240
+python -m scripts.check_model_preview --model severity_model --stage parent
+
+# 2. Recreate only the preview API with the candidate mount.
+docker compose --env-file outputs/model-preview/candidate.env -f compose.model-preview.yaml up -d --no-build --pull never --wait --wait-timeout 240
+python -m scripts.check_model_preview --model outputs/candidates/20261020T100542022874Z/model --stage candidate
+
+# 3. Restore the parent and verify its identity again.
+docker compose --env-file outputs/model-preview/parent.env -f compose.model-preview.yaml up -d --no-build --pull never --wait --wait-timeout 240
+python -m scripts.check_model_preview --model severity_model --stage rollback
+
+# 4. Remove only the disposable preview project.
+docker compose --env-file outputs/model-preview/parent.env -f compose.model-preview.yaml down --remove-orphans
+```
+
+If candidate startup or verification fails, stop the sequence and run the
+parent restoration plus rollback check before cleanup. Use the same explicit
+Compose file on all commands; do not run `down` against the normal stack.
+For diagnosis, run `docker compose --env-file outputs/model-preview/parent.env
+-f compose.model-preview.yaml logs --tail 80 api` (on one line).
+
+`scripts/check_model_preview.py` uses only standard-library HTTP plus existing
+artifact verification and smoke-response validation. It verifies local package
+integrity, `/ready`, exact severity and NER version/type/manifest identities,
+the preview severity mount path, and one `/predict` response's structure and
+probabilities. It rechecks local identities afterward and saves a new timestamped
+JSON observation under ignored `outputs/model-preview/`. It does not change
+containers, choose an image, perform promotion, or infer approval from a stage
+name. The `--stage` label describes the operator's step; individual reports must
+be reviewed together to establish the parent/candidate/parent sequence. Errors
+return a nonzero status without writing a success report.
+
+The same fixed synthetic request exercises serving, not model quality. Readiness
+alone cannot establish which model loaded. A successful rollback establishes a
+local recovery procedure, not zero-downtime deployment or a measured recovery
+SLA: each switch recreates one API container and temporarily interrupts preview
+requests. The normal frontend still targets port 8000; this API-only exercise
+does not test browser integration. Unsigned manifest identity proves package
+consistency, not publisher authenticity. The HTTP checker does not attest the
+container image digest; Compose's pinned image selects the executable, while
+the checker verifies model identity reported by that executable.
+
+`tests/test_model_preview.py` checks readiness/identity/mount/prediction failures,
+package mutation, failed-CLI output behavior and separate report creation.
+The normal backend CI discovers these unit tests; the live Docker drill is
+manual and uses local generated packages, so no CI workflow changes are needed.

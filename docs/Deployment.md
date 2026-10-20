@@ -1471,6 +1471,22 @@ for the full command and evidence/reviewer boundaries. The current outcome
 retains the parent demo selection; both artifacts remain unqualified for
 clinical/production use, and no automated quality threshold is introduced.
 
+## Isolated Model Activation and Rollback Exercise
+
+Use standalone `compose.model-preview.yaml` to rehearse parent -> candidate ->
+parent on the separate loopback port 18000. It pins the API image by digest and
+mounts the selected severity package read-only. It does not modify the regular
+8000/8080 stack, `.env.release`, active weight directories or the HOLD decision.
+Each recreation must pass readiness, exact manifest identity and prediction
+checks through `python -m scripts.check_model_preview` before proceeding.
+Restore the parent if activation fails, then remove only the preview project.
+
+See [the full exercise and recovery commands](Training.md#rehearse-activation-and-rollback-in-an-isolated-preview)
+for setup, verification, cleanup and boundaries. Generated selections and
+observations stay under ignored `outputs/model-preview/`. This tests operational
+switching of synthetic artifacts, not approval of candidate quality or a
+zero-downtime production rollout.
+
 ## Next Steps
 
 Frontend browser interaction tests and evaluation on representative real data
