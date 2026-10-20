@@ -1442,6 +1442,51 @@ See [the preparation contract](../data/training/README.md) for algorithms,
 small-class rounding, validation, incomplete-output handling and limitations.
 These synthetic splits teach the workflow; they are not a clinical benchmark.
 
+## Compare a Fixed Severity Candidate on Reserved Test Cases
+
+After validation-based checkpoint selection, run the comparison CLI using the
+saved dataset package and exported candidate model path:
+
+```powershell
+python -m scripts.compare_severity_models --dataset outputs/datasets/severity/20261020T094655271040Z --candidate outputs/candidates/20261020T100542022874Z/model
+```
+
+It verifies model/data lineage, assesses parent and candidate on identical
+reserved test rows through shared serving inference, and saves a separate
+timestamped report under ignored `outputs/evaluation/`. Models, training
+reports and split assignments remain immutable. No promotion, threshold gate,
+activation or container change occurs. See [the comparison guide](Training.md#compare-the-frozen-candidate-with-its-parent)
+for output interpretation and constraints. Existing backend CI discovers its
+lineage/output/real-inference tests through pytest.
+
+## Record the Synthetic Model Review Outcome
+
+After the fixed comparison, record the agreed HOLD outcome with explicit
+reasons using `python -m scripts.record_model_decision`. It requires the
+comparison file, prepared dataset and candidate path and verifies their
+identities/recorded metrics before writing a new local decision file under
+ignored `outputs/decisions/`. It performs no inference or activation. See
+[the HOLD review guide](Training.md#record-a-hold-decision-without-changing-serving-state)
+for the full command and evidence/reviewer boundaries. The current outcome
+retains the parent demo selection; both artifacts remain unqualified for
+clinical/production use, and no automated quality threshold is introduced.
+
+## Isolated Model Activation and Rollback Exercise
+
+Use standalone `compose.model-preview.yaml` to rehearse parent -> candidate ->
+parent on the separate loopback port 18000. It pins the API image by digest and
+mounts the selected severity package read-only. It does not modify the regular
+8000/8080 stack, `.env.release`, active weight directories or the HOLD decision.
+Each recreation must pass readiness, exact manifest identity and prediction
+checks through `python -m scripts.check_model_preview` before proceeding.
+Restore the parent if activation fails, then remove only the preview project.
+
+See [the full exercise and recovery commands](Training.md#rehearse-activation-and-rollback-in-an-isolated-preview)
+for setup, verification, cleanup and boundaries. Generated selections and
+observations stay under ignored `outputs/model-preview/`. This tests operational
+switching of synthetic artifacts, not approval of candidate quality or a
+zero-downtime production rollout.
+
 ## Next Steps
 
 Frontend browser interaction tests and evaluation on representative real data

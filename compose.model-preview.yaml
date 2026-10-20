@@ -1,0 +1,28 @@
+# Standalone, API-only synthetic exercise. Do not merge with compose.yaml.
+name: adeguard-model-preview
+
+services:
+  api:
+    image: "ghcr.io/mansaram90/adeguard-api@sha256:${ADEGUARD_PREVIEW_API_DIGEST:?Set the pinned preview API digest}"
+    pull_policy: never
+    ports:
+      - "127.0.0.1:18000:8000"
+    environment:
+      ADEGUARD_SEVERITY_MODEL_PATH: /models/severity
+    volumes:
+      - type: bind
+        source: "${ADEGUARD_PREVIEW_MODEL_DIR:?Set an existing severity package directory}"
+        target: /models/severity
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import json, urllib.request; response = urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3); assert json.load(response)['ready'] is True"
+      interval: 5s
+      timeout: 5s
+      start_period: 90s
+      retries: 12
