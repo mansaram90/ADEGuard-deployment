@@ -1601,6 +1601,13 @@ Safari, accessibility compliance, all failure modes or model quality.
 Evaluation on representative real data remains a separate future check.
 Cloud deployment remains out of scope until explicitly approved.
 
+For the approved preparation of a one-off AWS learning exercise, see
+[`infra/aws-demo.yaml`](../infra/aws-demo.yaml) and
+[the infrastructure runbook](../infra/README.md). Local validation creates no
+AWS resources. The template prepares an SSM-accessible Docker host, not a running
+ADEGuard application. Account-aware launch, bootstrap checks, verified-image
+deployment and confirmed resource deletion are separate later operations.
+
 Later production-readiness work:
 
 - replace demo artifacts with real validated model artifacts

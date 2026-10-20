@@ -1,0 +1,154 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Temporary ADEGuard learning host. No inbound ports, no app deployment.
+  Review costs and account eligibility before creating; delete after the exercise.
+
+Parameters:
+  AmazonLinuxImage:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
+    Description: AWS public parameter for the regional Amazon Linux 2023 x86_64 AMI.
+
+Resources:
+  DemoVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.42.0.0/24
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-vpc'
+
+  DemoSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DemoVpc
+      CidrBlock: 10.42.0.0/26
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-subnet'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref DemoVpc
+      InternetGatewayId: !Ref InternetGateway
+
+  DemoRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref DemoVpc
+
+  InternetRoute:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayAttachment
+    Properties:
+      RouteTableId: !Ref DemoRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref DemoSubnet
+      RouteTableId: !Ref DemoRouteTable
+
+  HostSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: No inbound access; outbound HTTPS for SSM, packages and registry pulls.
+      VpcId: !Ref DemoVpc
+      SecurityGroupIngress: []
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+  HostRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore'
+
+  HostInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref HostRole
+
+  DemoHost:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - GatewayAttachment
+      - InternetRoute
+      - SubnetRouteAssociation
+    Properties:
+      ImageId: !Ref AmazonLinuxImage
+      # x86_64 matches the currently published API image; not an ARM/Graviton host.
+      InstanceType: t3.small
+      IamInstanceProfile: !Ref HostInstanceProfile
+      CreditSpecification:
+        CPUCredits: standard
+      MetadataOptions:
+        HttpEndpoint: enabled
+        HttpTokens: required
+        HttpPutResponseHopLimit: 1
+      Monitoring: false
+      NetworkInterfaces:
+        - DeviceIndex: '0'
+          AssociatePublicIpAddress: true
+          DeleteOnTermination: true
+          SubnetId: !Ref DemoSubnet
+          GroupSet:
+            - !Ref HostSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp3
+            VolumeSize: 30
+            Encrypted: true
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-host'
+        - Key: Purpose
+          Value: adeguard-temporary-learning
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          set -euo pipefail
+          install -d -m 0755 /opt/adeguard
+          # This marker is written only if Docker installation/startup succeeds.
+          rm -f /opt/adeguard/bootstrap-complete
+          dnf install -y docker
+          systemctl enable --now docker
+          systemctl enable --now amazon-ssm-agent
+          docker version > /opt/adeguard/docker-version.txt
+          touch /opt/adeguard/bootstrap-complete
+
+Outputs:
+  InstanceId:
+    Description: Target for Systems Manager sessions; no public web endpoint is opened.
+    Value: !Ref DemoHost
+  Region:
+    Value: !Ref AWS::Region
+  VpcId:
+    Value: !Ref DemoVpc
+  ImageId:
+    Description: Resolved AMI for this deployment; record it with the exercise evidence.
+    Value: !Ref AmazonLinuxImage
+  RootVolumeCleanup:
+    Value: The encrypted root volume is configured for deletion on instance termination.

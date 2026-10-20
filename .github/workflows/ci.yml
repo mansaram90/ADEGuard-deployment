@@ -34,10 +34,29 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}
         run: python -m pytest
 
+  infrastructure-checks:
+    name: CloudFormation template checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python for infrastructure lint
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install template validator
+        run: python -m pip install -r requirements-infra.txt
+
+      - name: Validate the learning template offline
+        run: cfn-lint -t infra/aws-demo.yaml -r us-east-1
+
   docker-build:
     name: Docker build and smoke test
     # Keep tested images on this runner until every prerequisite has passed.
-    needs: [backend-tests, monitoring-tests]
+    needs: [backend-tests, monitoring-tests, infrastructure-checks]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
