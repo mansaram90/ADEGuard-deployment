@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 from pathlib import Path
+import re
 
 from .evaluation import SEVERITY_LABELS, load_synthetic_dataset
 
@@ -132,3 +133,54 @@ def prepare_dataset(source: Path, evaluation_fixture: Path, output: Path, seed: 
     with (output / "manifest.json").open("x", encoding="utf-8", newline="\n") as stream:
         stream.write(json.dumps(manifest, indent=2) + "\n")
     return manifest
+
+
+def load_prepared_dataset(package: Path, evaluation_fixture: Path) -> tuple[dict, dict, str]:
+    """Verify saved package contents before use; hashes do not prove authorship."""
+    try:
+        names = {"manifest.json", "train.jsonl", "validation.jsonl", "test.jsonl"}
+        if package.is_symlink() or not package.is_dir() or {p.name for p in package.iterdir()} != names:
+            raise ValueError("Expected exactly the manifest and three split files")
+        if any(not path.is_file() or path.is_symlink() for path in package.iterdir()):
+            raise ValueError("Dataset package must contain regular files without symlinks")
+        raw = (package / "manifest.json").read_bytes()
+        manifest = json.loads(raw)
+        if type(manifest["schema_version"]) is not int or manifest["schema_version"] != 1:
+            raise ValueError("Unsupported dataset manifest version")
+        if manifest["scope"] != "synthetic_learning_only" or manifest["clinical_validation"] is not False:
+            raise ValueError("Only declared synthetic learning packages are supported")
+        if manifest["algorithm"] != "stratified_hash_rank_v1" or manifest["case_id_algorithm"] != "sha256_casefold_whitespace_v1":
+            raise ValueError("Unsupported dataset algorithms")
+        if type(manifest["seed"]) is not int or manifest["requested_percentages"] != SPLIT_WEIGHTS:
+            raise ValueError("Invalid split settings")
+        if set(manifest["files"]) != {f"{name}.jsonl" for name in SPLIT_WEIGHTS} or set(manifest["splits"]) != set(SPLIT_WEIGHTS):
+            raise ValueError("Invalid split/file mapping")
+        for value in [manifest["source"]["sha256"], manifest["protected_evaluation"]["sha256"], *manifest["files"].values()]:
+            if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+                raise ValueError("Invalid dataset SHA-256")
+        protected, protected_hash = load_synthetic_dataset(evaluation_fixture)
+        if manifest["protected_evaluation"]["sha256"] != protected_hash or manifest["protected_evaluation"]["examples"] != len(protected):
+            raise ValueError("Protected evaluation fixture differs from preparation")
+        splits = {}
+        for name in SPLIT_WEIGHTS:
+            rows, digest = load_synthetic_dataset(package / f"{name}.jsonl")
+            if digest != manifest["files"][f"{name}.jsonl"]:
+                raise ValueError(f"Dataset hash mismatch: {name}")
+            details = manifest["splits"][name]
+            counts = {label: sum(row["label"] == label for row in rows) for label in SEVERITY_LABELS}
+            if details["examples"] != len(rows) or details["ids"] != [row["id"] for row in rows] or details["class_counts"] != counts:
+                raise ValueError(f"Split metadata mismatch: {name}")
+            for row in rows:
+                expected = "syn-sev-" + hashlib.sha256(normalize_case_text(row["text"]).encode()).hexdigest()
+                if row["id"] != expected:
+                    raise ValueError(f"Case ID does not match text: {name}")
+            splits[name] = rows
+        ids = {case_id for split in manifest["splits"].values() for case_id in split["ids"]}
+        validate_splits(splits, ids, {normalize_case_text(row["text"]) for row in protected})
+        if manifest["source"]["examples"] != sum(len(rows) for rows in splits.values()):
+            raise ValueError("Source example count mismatch")
+        if stratified_split([row for rows in splits.values() for row in rows], manifest["seed"]) != splits:
+            raise ValueError("Saved membership does not match the recorded splitting algorithm")
+        return splits, manifest, hashlib.sha256(raw).hexdigest()
+    except (KeyError, TypeError, AttributeError, ValueError, OSError) as error:
+        raise ValueError(f"Invalid prepared dataset {package}: {error}") from error
