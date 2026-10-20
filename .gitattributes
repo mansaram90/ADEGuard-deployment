@@ -3,3 +3,5 @@ ner_model/** -text
 severity_model/** -text
 # Keep evaluation dataset byte identities stable across Windows/Linux checkout.
 evaluation/*.jsonl -text
+# Fingerprint the synthetic training CSV without checkout newline conversion.
+data/training/dataset_with_entities_and_weaklabels.csv -text

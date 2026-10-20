@@ -1410,6 +1410,37 @@ was produced, including when the measured scores are poor. A representative
 labeled benchmark and trained model are prerequisites for meaningful quality
 gates. Code/runtime and data-split provenance also matter when comparing runs.
 
+## Prepare Reproducible Synthetic Severity Splits
+
+The next training foundation is a validated data package, not an overwrite of
+the serving model. Run:
+
+```powershell
+python -m scripts.prepare_severity_data
+```
+
+`src/data_preparation.py` validates the synthetic training CSV, checks label
+mapping consistency, assigns stable text-derived IDs, and creates deterministic
+stratified train/validation/test splits. Defaults target 70/15/15 with seed 42;
+whole-case rounding yields 32/7/6 on the current 45-row source. Every class
+appears in every split. All source IDs are covered once, and normalized text
+overlap with the separate 12-case evaluation fixture is rejected.
+
+New timestamped packages are written under ignored `outputs/datasets/severity/`.
+Each contains three JSONL files and a manifest recording source/evaluation
+fingerprints, algorithms, seed, IDs/class counts and file hashes. Identical
+inputs/seed produce identical package bytes, independent of CSV row order for
+case assignments. Reordering the source still changes its raw-byte fingerprint.
+Existing output directories are not overwritten.
+
+Use the saved train split for fitting, validation for candidate selection,
+and test after selection. Candidate training will be a separate step and must
+consume and verify the saved package rather than re-split or overwrite active
+artifacts. There is no new inference behavior or automated promotion here.
+See [the preparation contract](../data/training/README.md) for algorithms,
+small-class rounding, validation, incomplete-output handling and limitations.
+These synthetic splits teach the workflow; they are not a clinical benchmark.
+
 ## Next Steps
 
 Frontend browser interaction tests and evaluation on representative real data
