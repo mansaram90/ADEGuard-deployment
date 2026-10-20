@@ -10,7 +10,7 @@ import argparse
 import json
 import math
 import sys
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
@@ -102,6 +102,35 @@ def run_checks(api_url: str, frontend_url: str) -> None:
     require(headers.get("Access-Control-Allow-Origin") == frontend_url, "Prediction origin not allowed")
     validate_prediction(json.loads(content))
     print("PASS: prediction structure, probabilities, and CORS response", flush=True)
+
+    content, proxy_headers = request(
+        frontend_url + "/api/predict", method="POST",
+        headers={"Content-Type": "application/json"},
+        body=json.dumps({"text": SAMPLE_TEXT}).encode("utf-8"),
+    )
+    validate_prediction(json.loads(content))
+    require(bool(proxy_headers.get("X-Request-ID")), "Proxy lost the API request ID")
+    print("PASS: same-origin Nginx prediction forwarding", flush=True)
+
+    try:
+        request(frontend_url + "/api/predict", method="POST",
+                headers={"Content-Type": "application/json"},
+                body=json.dumps({"text": "   "}).encode("utf-8"))
+    except HTTPError as error:
+        require(error.code == 422, "Proxy did not preserve input validation status")
+        require(bool(json.loads(error.read()).get("detail")), "Proxy lost validation details")
+    else:
+        raise ValueError("Proxy accepted whitespace-only input")
+    print("PASS: Nginx preserves API validation errors", flush=True)
+
+    for path in ("/api/metrics", "/api/model-info", "/api/ready"):
+        try:
+            request(frontend_url + path)
+        except HTTPError as error:
+            require(error.code == 404, f"Unexpected proxy exposure/status: {path}")
+        else:
+            raise ValueError(f"Operational endpoint exposed through proxy: {path}")
+    print("PASS: operational API routes are not exposed through the frontend", flush=True)
 
     content, headers = request(api_url + "/metrics")
     require(headers.get("Content-Type", "").startswith("text/plain"), "Metrics must use Prometheus text format")

@@ -71,6 +71,23 @@ jobs:
       - name: Check frontend and API prediction
         run: python scripts/smoke_test.py
 
+      - name: Install browser test tooling
+        run: |
+          python -m pip install -r requirements-browser.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Verify real browser flows
+        run: python -m scripts.browser_checks
+
+      - name: Save browser screenshots and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-evidence-${{ github.sha }}-${{ github.run_attempt }}
+          path: outputs/browser/
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Log in to GitHub Container Registry
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: bash

@@ -1,0 +1,2 @@
+# Test tooling only: keep browser dependencies out of API/runtime images.
+playwright==1.64.0

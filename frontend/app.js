@@ -1,7 +1,7 @@
 "use strict";
 
-// This local demo talks to the API; model inference stays in Python.
-const API_BASE_URL = "http://127.0.0.1:8000";
+// Same-origin requests go through Nginx; model inference stays in Python.
+const API_BASE_URL = "/api";
 const form = document.querySelector("#prediction-form");
 const report = document.querySelector("#report");
 const analyze = document.querySelector("#analyze");
@@ -114,7 +114,7 @@ form.addEventListener("submit", async (event) => {
     const message = error.name === "AbortError"
       ? "The request timed out. Check that the API is ready, then try again."
       : error instanceof TypeError
-        ? "Cannot reach the API. Start the backend on port 8000 and open this page on port 8080."
+        ? "Cannot reach the API. Check the application connection and try again."
         : error.message;
     setStatus(message, true);
   } finally {
