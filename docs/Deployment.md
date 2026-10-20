@@ -1442,6 +1442,23 @@ See [the preparation contract](../data/training/README.md) for algorithms,
 small-class rounding, validation, incomplete-output handling and limitations.
 These synthetic splits teach the workflow; they are not a clinical benchmark.
 
+## Compare a Fixed Severity Candidate on Reserved Test Cases
+
+After validation-based checkpoint selection, run the comparison CLI using the
+saved dataset package and exported candidate model path:
+
+```powershell
+python -m scripts.compare_severity_models --dataset outputs/datasets/severity/20261020T094655271040Z --candidate outputs/candidates/20261020T100542022874Z/model
+```
+
+It verifies model/data lineage, assesses parent and candidate on identical
+reserved test rows through shared serving inference, and saves a separate
+timestamped report under ignored `outputs/evaluation/`. Models, training
+reports and split assignments remain immutable. No promotion, threshold gate,
+activation or container change occurs. See [the comparison guide](Training.md#compare-the-frozen-candidate-with-its-parent)
+for output interpretation and constraints. Existing backend CI discovers its
+lineage/output/real-inference tests through pytest.
+
 ## Next Steps
 
 Frontend browser interaction tests and evaluation on representative real data

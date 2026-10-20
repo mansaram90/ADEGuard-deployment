@@ -97,8 +97,8 @@ from 1.0991 to 1.0759, but checkpoint selection followed validation macro F1.
 The parent predicted Mild for all seven validation cases; the selected
 candidate predicted Moderate for all seven. The modest score increase reflects
 this class collapse on a tiny toy split, not useful severity discrimination.
-No test score or clinical improvement is claimed. The active NER/severity
-weight files were confirmed unchanged.
+That training command did not score the test split or establish clinical
+improvement. The active NER/severity weight files were confirmed unchanged.
 
 `tests/test_candidate_training.py` exercises package corruption/settings/output
 guards and real repeatable training. It asserts no test/fixture text is scored,
@@ -107,3 +107,76 @@ and reloads the exported checkpoint through shared serving inference to compare
 its validation metrics with the selected epoch.
 
 Reference: [Transformers local model loading and saving](https://huggingface.co/docs/transformers/main_classes/model).
+
+## Compare the frozen candidate with its parent
+
+After selection, assess the fixed candidate and its recorded parent on the
+same reserved six-case test split:
+
+```powershell
+python -m scripts.compare_severity_models --dataset outputs/datasets/severity/20261020T094655271040Z --candidate outputs/candidates/20261020T100542022874Z/model
+```
+
+`--parent` defaults to the configured severity model; if that changes later,
+supply the original parent path explicitly. Optional `--evaluation` chooses
+the protected synthetic fixture used during data preparation; it is verified,
+not scored here. `--output` chooses a new report path. Defaults write a new
+timestamped report under ignored `outputs/evaluation/`. Existing report files
+and paths inside dataset/model packages are refused, including active model
+directories. Inputs must remain immutable during assessment.
+
+The command verifies the saved package and both model artifact manifests. The
+candidate's hashed training report must identify the supplied parent/version,
+the exact dataset manifest/source/split file hashes and counts, reserved test/
+fixture flags, and the expected validation-only selection rule. Its best epoch
+and selected metrics must agree with the recorded epoch history. These are
+consistency checks on local recorded lineage, not proof of trusted provenance
+or an audit of arbitrary external training behavior.
+
+Both models then load locally on CPU, switch to evaluation mode, and predict
+the identical ordered test examples through the shared serving method. The
+trainer is never called. No epoch is selected again and no model/report files
+inside either artifact are written. Thread settings are restored afterward.
+
+The separate JSON report records model identities, selected epoch/training
+report hash, dataset/test fingerprints, runtime and implementation hashes,
+accuracy, macro F1, all per-class precision/recall/F1/support and confusion
+matrices. Case IDs, expected/predicted labels and confidence show mistakes
+without copying input text. Candidate-minus-parent deltas and paired outcome
+IDs identify gains and regressions on the same examples.
+
+### Observed first reserved-test assessment
+
+| Metric | Parent | Fixed candidate |
+|---|---:|---:|
+| Correct cases | 2/6 | 3/6 |
+| Accuracy | 0.3333 | 0.5000 |
+| Macro F1 | 0.1667 | 0.2222 |
+| Severe recall | 0.0000 | 0.0000 |
+| Moderate recall | 0.0000 | 1.0000 |
+| Mild recall | 1.0000 | 0.0000 |
+
+The parent predicted Mild for every test case; the candidate predicted Moderate
+for every case. The candidate gained three Moderate cases but lost two Mild
+cases, and both missed the one Severe case. No case was correct for both.
+These paired outcomes explain the aggregate score increase: one extra correct
+answer, not evidence of reliable class discrimination. Tiny synthetic sample
+counts do not establish statistical reliability or clinical performance.
+
+The candidate remains epoch 1, and the original training report is unchanged.
+Its `test_split_scored: false` describes the training/selection stage. The new
+comparison report records the later test assessment separately. It applies no
+quality gate, changes no serving selection, and records no promotion. A human
+promotion decision is a separate step; a higher macro F1 alone does not make
+this one-class candidate qualified for real use.
+
+The test split is now observed. Keep the checkpoint choice fixed; using these
+results to choose another epoch or tune settings would turn the test into a
+selection set. Repeating the same frozen assessment for technical verification
+does not add independent evidence. Future genuine selection requires suitable
+validation data and a separate untouched benchmark.
+
+`tests/test_model_comparison.py` rejects incorrect parent/data/selection lineage,
+checks report/output guards, verifies only the same test texts are scored by
+both models, checks case/paired outcomes, and compares all input file hashes
+before/after the real assessment. Generated reports remain local.
