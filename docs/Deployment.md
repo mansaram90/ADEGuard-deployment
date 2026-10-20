@@ -1434,9 +1434,10 @@ case assignments. Reordering the source still changes its raw-byte fingerprint.
 Existing output directories are not overwritten.
 
 Use the saved train split for fitting, validation for candidate selection,
-and test after selection. Candidate training will be a separate step and must
-consume and verify the saved package rather than re-split or overwrite active
-artifacts. There is no new inference behavior or automated promotion here.
+and test after selection. Candidate training consumes and verifies the saved
+package rather than re-splitting or overwriting active artifacts; see
+[synthetic candidate training](Training.md). There is no change to active
+inference behavior or automated promotion.
 See [the preparation contract](../data/training/README.md) for algorithms,
 small-class rounding, validation, incomplete-output handling and limitations.
 These synthetic splits teach the workflow; they are not a clinical benchmark.

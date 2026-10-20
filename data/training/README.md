@@ -84,7 +84,8 @@ and SHA-256 of the output files. It is written last; a package without a valid
 manifest is incomplete and must not be used. Preparation refuses overwrite
 and does not clean up a partial directory after an I/O failure. A future
 training consumer must verify the manifest and output file fingerprints before
-using a saved package.
+using a saved package. The candidate CLI now does this through
+`load_prepared_dataset()`; see [the training guide](../../docs/Training.md).
 
 The source CSV's Git attributes preserve exact bytes on Windows/Linux. Hashes
 identify the content, not trusted authorship or label correctness. The manifest
