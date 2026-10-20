@@ -1,0 +1,2 @@
+# Local/CI template validation only; not an application runtime dependency.
+cfn-lint==1.57.2
