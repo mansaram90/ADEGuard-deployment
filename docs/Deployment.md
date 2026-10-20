@@ -137,19 +137,14 @@ http://127.0.0.1:8000/docs
 ## Standalone Frontend (Local Demo)
 
 The browser UI lives in `frontend/` and uses plain HTML, CSS, and JavaScript.
-It sends JSON to FastAPI's `/predict` endpoint; models remain in the backend.
+It sends JSON to `/api/predict` on the frontend's own origin. Nginx forwards
+that request to FastAPI's internal `/predict`; models remain in the backend.
 No Node.js packages or frontend build step are required.
 
-From the project root, start the API in one terminal:
+From the project root, start the API and Nginx frontend using Compose:
 
 ```powershell
-python -m uvicorn src.api:app --host 127.0.0.1 --port 8000
-```
-
-In a second terminal, from the same project root, serve only the frontend folder:
-
-```powershell
-python -m http.server 8080 --bind 127.0.0.1 --directory frontend
+docker compose up -d --build --wait --wait-timeout 240 api frontend
 ```
 
 Open http://127.0.0.1:8080 in your browser. Select **Use sample**, then
@@ -157,21 +152,21 @@ Open http://127.0.0.1:8080 in your browser. Select **Use sample**, then
 appear. These values come from random synthetic models and have no clinical
 meaning. Use fictional reports for this demo.
 
-The JavaScript API address is `http://127.0.0.1:8000`. FastAPI permits browser
-requests from `http://127.0.0.1:8080` and `http://localhost:8080` using CORS.
-An origin includes scheme, hostname, and port. Opening `index.html` directly
-or choosing a different frontend port will not match this policy. CORS is not
-authentication and does not prevent requests from non-browser clients.
+The JavaScript API base is `/api`. Requests use the page's scheme, hostname and
+port, so the browser does not need cross-origin permission for this route.
+The previous `python -m http.server` frontend command only serves static files
+and cannot provide this reverse proxy; use the Nginx container. Direct local
+API calls still have the existing FastAPI CORS policy. CORS is not authentication.
 
-If the UI cannot reach the API, verify `/ready` at port 8000, the two terminal
-processes, and the browser URL. Restart the API after code changes. A Docker
-backend also needs rebuilding to include the new CORS configuration.
+If prediction fails, inspect `docker compose logs --tail 80 frontend api` and
+API readiness at port 8000. Rebuild/recreate the frontend after changing its
+JavaScript or Nginx configuration. A stale browser page may need reloading.
 
 Manual checks: submit sample text, check that empty/whitespace input is
-rejected, resize the browser, navigate with the keyboard, and stop the API
-before submitting again to verify the connection error message. Editing text
+rejected, resize the browser and navigate with the keyboard. Browser automation
+simulates network and gateway errors without stopping the API. Editing text
 hides previous results so they cannot be mistaken for results for the new text.
-Use `Ctrl+C` in each terminal to stop the servers.
+Use `docker compose down` when you intend to stop the local Compose project.
 
 The frontend is local-only in this phase. See Docker Compose below to run both
 services in containers. Hosting and expanded CI are separate future steps.
@@ -209,11 +204,11 @@ The API remains available at http://127.0.0.1:8000/docs. Both published ports
 are bound to loopback for local use only. Predictions still use the synthetic
 demo models and are not clinically meaningful.
 
-Although Compose creates a container network, the JavaScript executes in your
-host browser. Its API address therefore remains `http://127.0.0.1:8000`, the
-published host port. The name `api` is resolvable between Compose containers,
-but is not the API hostname for your browser. The existing local CORS policy
-continues to allow the frontend on port 8080.
+JavaScript executes in your host browser and requests `/api/predict` from the
+frontend origin. Nginx resolves `api` on the Compose network and forwards to
+`api:8000/predict`. The browser never resolves Docker service names. Local port
+8000 remains available for diagnostics and existing smoke/CORS checks, but the
+UI does not depend on that host-published API port.
 
 Useful commands from the project root:
 
@@ -1158,8 +1153,9 @@ personal credentials into the workflow.
 
 Publishing makes images available; it does not update your running Compose
 stack or deploy any cloud resources. Local Compose still uses its existing
-`build` configuration. The frontend still targets `http://127.0.0.1:8000`,
-and this step does not make the app suitable for arbitrary remote hosting.
+`build` configuration. New frontend images use same-origin `/api/predict`
+routing; historical images may still use the earlier localhost API address.
+Publishing alone does not configure remote access, HTTPS or authentication.
 Synthetic model artifacts and local `steps.md` handling retain their existing
 scope. The Dockerfiles copy selected application/model/frontend files, so
 `steps.md` is not included in either published image.
@@ -1243,11 +1239,12 @@ on readiness problems. The frontend depends on healthy API readiness, not just
 creation of its container.
 
 Open `http://127.0.0.1:8080` and submit an example after readiness succeeds.
-The existing static frontend targets `http://127.0.0.1:8000`, and the API allows
-the existing local frontend origins. Changing only published host ports does
-not reconfigure the JavaScript or CORS; this release path supports the current
-local layout. The HTTP smoke test verifies assets, readiness, model version
-fields, prediction, CORS, and metrics. Compare model-info values with the
+New frontend images forward same-origin `/api/predict` through Nginx. Historical
+image pairs can retain the old direct-localhost routing; use matching code and
+images when reproducing historical releases. The updated HTTP smoke test requires
+the new proxy route and verifies assets, readiness, model version fields,
+direct prediction/CORS, proxied prediction/validation errors, blocked operational
+proxy routes and metrics. Compare model-info values with the
 expected release as part of accepting the selected pair. This does not evaluate
 clinical model quality or automate browser interaction.
 
@@ -1487,11 +1484,122 @@ observations stay under ignored `outputs/model-preview/`. This tests operational
 switching of synthetic artifacts, not approval of candidate quality or a
 zero-downtime production rollout.
 
+## Same-Origin Nginx Routing
+
+`frontend/nginx.conf` is copied to `/etc/nginx/conf.d/default.conf` by the
+frontend Dockerfile. It serves static files and exposes one exact proxied path:
+
+```text
+Browser POST /api/predict -> Nginx -> http://api:8000/predict -> FastAPI models
+```
+
+`frontend/app.js` uses `/api`, so the browser automatically uses the page's
+scheme, hostname and port. Moving the page to another host therefore does not
+require embedding an AWS IP in JavaScript. Docker DNS resolves the service name
+`api` inside the frontend container. The configuration uses Docker's embedded
+resolver `127.0.0.11`, a five-second DNS validity and a variable in `proxy_pass`
+so resolution can refresh after the API container is recreated. The explicit
+upstream URI `/predict` removes the external `/api` prefix. See
+[Nginx proxy_pass](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_pass)
+and [resolver](https://nginx.org/en/docs/http/ngx_http_core_module.html#resolver).
+
+Only `/api/predict` is forwarded. `/api/metrics`, `/api/model-info`, `/api/ready`
+and other `/api/` paths return 404. API diagnostics/monitoring remain available
+through their existing loopback or Docker-network paths. Existing Compose files
+still publish API port 8000 on loopback for local tools; this change does not
+remove it or add authentication. The proxy is not a public-deployment security
+boundary by itself. It adds neither HTTPS nor public ingress.
+
+The request body, upstream JSON/status and `X-Request-ID` response header pass
+through. HTTP/1.1 with the hop-by-hop Connection header cleared avoids passing
+the incoming connection setting upstream. Connect timeout is five seconds;
+upstream read/send timeouts are 35 seconds. The browser retains its 30-second
+request timeout. An unreachable upstream can produce HTTP 502; the UI reports
+the HTTP status and restores controls. A browser network failure instead shows
+the connection message. The proxy does not add retries or response caching.
+
+For an existing running stack, update only the frontend:
+
+```powershell
+docker compose build frontend
+docker compose up -d --no-deps --no-build --wait --wait-timeout 60 frontend
+docker compose exec -T frontend nginx -t
+python scripts/smoke_test.py
+python -m scripts.browser_checks
+```
+
+This recreates the frontend container, briefly interrupting UI requests. It
+leaves the existing API/monitoring containers running. An initial startup still
+uses the regular Compose command that starts both services and waits for API
+readiness. Plain Python static-file serving no longer supplies working UI API
+routing. Historical image digests remain immutable and keep their earlier
+behavior; publish/select a new frontend image for this routing configuration.
+
+## Real Browser Validation
+
+HTTP smoke checks verify endpoints and assets, but do not execute frontend
+JavaScript or exercise browser CORS. `scripts/browser_checks.py` uses
+[Playwright's Python library](https://playwright.dev/python/docs/library) with
+headless Chromium and Python's `unittest` runner against the running application:
+
+```powershell
+python -m pip install -r requirements-browser.txt
+python -m playwright install chromium
+# Start the ordinary API/frontend first, if they are not already running:
+docker compose up -d --wait --wait-timeout 240 api frontend
+python -m scripts.browser_checks
+```
+
+Use the ordinary localhost ports: frontend `http://127.0.0.1:8080`, API
+`http://127.0.0.1:8000` for direct diagnostics. The browser uses the frontend's
+same-origin `/api/predict`, not the direct API address.
+The browser script does not start, rebuild or stop services. On Linux CI,
+`python -m playwright install --with-deps chromium` also installs browser system
+dependencies. `requirements-browser.txt` pins Playwright separately from API
+dependencies; browser tooling is not installed in either serving image.
+
+The five independently isolated browser cases check:
+
+- Sample button fills the expected fictional text and updates its character count.
+- Real prediction submission, actual response rendering of entities/severity/
+  probabilities, restored controls, and hiding stale results after text edits.
+- Empty and whitespace-only input are blocked without sending prediction requests.
+- Browser-local network failure shows the connection error and restores usable
+  controls; removing interception permits a successful real-API retry.
+- A simulated HTTP 502 gateway response restores usable controls and permits
+  retry through real Nginx and FastAPI after interception is removed.
+
+The failure case uses [Playwright request interception](https://playwright.dev/python/docs/network)
+on that test page only. It stops no API/container, and successful responses are
+not mocked. Each case opens a fresh browser context so intercepted requests and
+page state cannot leak into later cases. Browser assertions wait for expected
+conditions rather than fixed sleeps. The success assertions compare the page
+with the real response; they do not assert a fixed model prediction or imply
+clinical accuracy.
+
+Every run saves screenshots and trace ZIPs to a new timestamped directory under
+ignored `outputs/browser/`. Inspect a trace locally using:
+
+```powershell
+python -m playwright show-trace outputs/browser/<run>/test_connection_error_allows_real_retry.zip
+```
+
+Traces contain DOM snapshots, source and network information. Use fictional
+test data. Screenshots are evidence for diagnosis, not visual-regression tests.
+
+The existing Docker CI job installs the test tooling after stack startup and
+HTTP smoke checks, then runs `python -m scripts.browser_checks` before registry
+login/publishing. A browser failure prevents subsequent image publishing.
+An `always()` artifact step saves available browser evidence for seven days;
+existing failure logs and Compose cleanup still run. Backend `python -m pytest`
+remains independent of Playwright: this explicit script is not named for pytest
+discovery. These checks cover Chromium on the tested platforms, not Firefox,
+Safari, accessibility compliance, all failure modes or model quality.
+
 ## Next Steps
 
-Frontend browser interaction tests and evaluation on representative real data
-are separate future checks. Cloud deployment remains out of scope until
-explicitly approved.
+Evaluation on representative real data remains a separate future check.
+Cloud deployment remains out of scope until explicitly approved.
 
 Later production-readiness work:
 
