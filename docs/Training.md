@@ -180,3 +180,57 @@ validation data and a separate untouched benchmark.
 checks report/output guards, verifies only the same test texts are scored by
 both models, checks case/paired outcomes, and compares all input file hashes
 before/after the real assessment. Generated reports remain local.
+
+## Record a HOLD decision without changing serving state
+
+The review outcome for this synthetic candidate is **hold candidate; retain the
+existing parent demo selection**. The candidate predicts only Moderate, misses
+the Severe case and loses Mild recall, despite its higher aggregate score.
+Six synthetic examples do not qualify either artifact for real-world use.
+Retention preserves an operational learning baseline; it is not approval of
+the parent's predictive quality.
+
+Record the reasons and evidence rather than treating the metric increase as
+an automatic deployment instruction:
+
+```powershell
+python -m scripts.record_model_decision --comparison outputs/evaluation/comparison-20261020T103147533338Z.json --dataset outputs/datasets/severity/20261020T094655271040Z --candidate outputs/candidates/20261020T100542022874Z/model --reason "One-class predictions, a missed Severe case, and loss of Mild recall on six synthetic cases."
+```
+
+Repeat `--reason` to record multiple explicit rationales. Use `--parent` if the
+configured model no longer matches the candidate's recorded parent. Optional
+`--evaluation` supplies the protected fixture for package verification and
+`--output` selects a new record path. Existing reports or paths inside data/
+model packages are refused. Defaults create a new timestamped JSON file under
+ignored `outputs/decisions/`; there is no promote/activate operation.
+
+The recorder verifies the prepared package, both artifact manifests and
+training lineage, then binds the comparison to the same test IDs/labels,
+dataset/test fingerprints, model identities, selected epoch and training-report
+hash. It checks correctness flags and finite confidence, recalculates metrics
+from the recorded predictions, and validates class/mistake counts. A mismatch
+fails rather than recording a misleading score summary. Reasons must be
+nonempty and distinct. The comparison SHA-256 covers the exact bytes parsed.
+
+The generated decision contains the HOLD outcome, rationale, report fingerprint,
+retained-parent/held-candidate identities, dataset/selection references and
+verified metric summaries. It explicitly identifies an
+`agent_assisted_manual_learning_review`, with clinical/production approval,
+quality-gate application, inference, serving change and promotion all false.
+The actual approved review used three reasons: one-class Moderate predictions;
+zero Severe recall plus loss of Mild recall; and insufficient evidence from
+six synthetic cases.
+
+This is a recorded review judgment, not a predeclared automated quality policy
+or a medical/production sign-off. The command checks consistency of local
+recorded evidence; it does not rerun inference, authenticate prediction history,
+prove reviewer identity, query the running API, or establish trusted authorship
+of an unsigned comparison/manifest. It copies no weights and changes no API
+configuration, environment selection or containers. Keep the original comparison,
+artifacts and dataset available when reviewing the fingerprinted record.
+
+`tests/test_model_decision.py` covers corrupted evidence, explicit reasons,
+output protection and a successful fresh-process CLI run that loads neither
+torch nor transformers and preserves all supplied input hashes. Existing
+pytest CI discovers these tests without workflow changes. Actual records and
+local `steps.md` remain outside the commit.

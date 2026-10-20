@@ -1459,6 +1459,18 @@ activation or container change occurs. See [the comparison guide](Training.md#co
 for output interpretation and constraints. Existing backend CI discovers its
 lineage/output/real-inference tests through pytest.
 
+## Record the Synthetic Model Review Outcome
+
+After the fixed comparison, record the agreed HOLD outcome with explicit
+reasons using `python -m scripts.record_model_decision`. It requires the
+comparison file, prepared dataset and candidate path and verifies their
+identities/recorded metrics before writing a new local decision file under
+ignored `outputs/decisions/`. It performs no inference or activation. See
+[the HOLD review guide](Training.md#record-a-hold-decision-without-changing-serving-state)
+for the full command and evidence/reviewer boundaries. The current outcome
+retains the parent demo selection; both artifacts remain unqualified for
+clinical/production use, and no automated quality threshold is introduced.
+
 ## Next Steps
 
 Frontend browser interaction tests and evaluation on representative real data
